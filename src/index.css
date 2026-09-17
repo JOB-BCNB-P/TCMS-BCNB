@@ -1,0 +1,74 @@
+@import '@fontsource/sarabun/300.css';
+@import '@fontsource/sarabun/400.css';
+@import '@fontsource/sarabun/500.css';
+@import '@fontsource/sarabun/600.css';
+@import '@fontsource/sarabun/700.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-brand-50 text-slate-800 antialiased;
+    @apply dark:bg-slate-950 dark:text-slate-100;
+    font-feature-settings: 'liga' 1;
+  }
+  /* เส้นโฟกัสต้องมองเห็นได้เสมอ — ข้อกำหนดการใช้งานด้วยแป้นพิมพ์ */
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand-500 ring-offset-2 ring-offset-white dark:ring-offset-slate-950;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-xl border border-slate-200 bg-white shadow-card;
+    @apply dark:border-slate-800 dark:bg-slate-900;
+  }
+  /* ปุ่มสูงอย่างน้อย 44px เพื่อให้กดง่ายบนโทรศัพท์ */
+  .btn {
+    @apply inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg px-4 text-sm font-medium;
+    @apply transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply btn bg-brand-600 text-white hover:bg-brand-700 active:bg-brand-800;
+  }
+  .btn-secondary {
+    @apply btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50;
+    @apply dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800;
+  }
+  .btn-danger {
+    @apply btn bg-rose-600 text-white hover:bg-rose-700;
+  }
+  .field-label {
+    @apply mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300;
+  }
+  .field-input {
+    @apply min-h-[44px] w-full rounded-lg border border-slate-300 bg-white px-3 text-sm;
+    @apply focus:border-brand-500 dark:border-slate-700 dark:bg-slate-900;
+  }
+  .table-head {
+    @apply bg-brand-50 text-xs font-semibold uppercase tracking-wide text-brand-900;
+    @apply dark:bg-slate-800 dark:text-slate-200;
+  }
+}
+
+/* การพิมพ์เอกสารราชการ: ซ่อนส่วนติดต่อผู้ใช้ทั้งหมด */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+}

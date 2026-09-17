@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  frontend:
+    name: ตรวจชนิดข้อมูลและ build หน้าเว็บ
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - name: build
+        env:
+          # ค่าปลอมสำหรับขั้นตอน build เท่านั้น ไม่ใช่ค่าจริงของระบบ
+          VITE_SUPABASE_URL: https://example.supabase.co
+          VITE_SUPABASE_ANON_KEY: ci-placeholder
+        run: npm run build
+
+  database:
+    name: ตรวจ migration และชุดทดสอบความปลอดภัย
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+        ports: ['5432:5432']
+    env:
+      PGPASSWORD: postgres
+      PSQL: psql -h localhost -U postgres -v ON_ERROR_STOP=1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: จำลองสภาพแวดล้อมของ Supabase
+        run: $PSQL -d postgres -q -f supabase/tests/_supabase_stub.sql
+
+      - name: รัน migration ตามลำดับ
+        run: |
+          for f in $(ls supabase/migrations/*.sql | sort); do
+            echo "== $f"
+            $PSQL -d postgres -q -f "$f"
+          done
+
+      - name: รันชุดทดสอบความปลอดภัย
+        run: |
+          $PSQL -d postgres -f supabase/tests/rls_smoke_test.sql 2>&1 | tee /tmp/out.txt
+          # ทดสอบตกแม้ข้อเดียวคือช่องโหว่ ไม่ใช่แค่เทสต์ตก
+          if grep -q 'FAIL' /tmp/out.txt; then
+            echo "::error::มีการทดสอบความปลอดภัยที่ไม่ผ่าน"
+            exit 1
+          fi
+          grep -c 'PASS' /tmp/out.txt

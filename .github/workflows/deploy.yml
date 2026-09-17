@@ -1,0 +1,94 @@
+# ================================================================
+# นำเว็บขึ้น GitHub Pages อัตโนมัติทุกครั้งที่ push ขึ้น branch main
+#
+# ตั้งค่าครั้งเดียวที่ GitHub:
+#   Settings → Pages → Build and deployment → Source = "GitHub Actions"
+#
+# repo นี้เป็นสาธารณะ ด่านตรวจสองด่านแรกจึงสำคัญกว่าตัว build
+# ================================================================
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ตรวจว่าไม่มีคีย์ลับระดับเซิร์ฟเวอร์หลุดเข้ามาใน repo
+        run: |
+          # ตรวจ "รูปแบบของคีย์จริง" ไม่ใช่คำที่พูดถึงคีย์ในคอมเมนต์หรือเอกสาร
+          #   sb_secret_...                   คีย์ลับรูปแบบใหม่ของ Supabase
+          #   SUPABASE_SERVICE_ROLE_KEY = ... การกำหนดค่าคีย์ลับลงตัวแปร
+          #   "role":"service_role"           payload ของ JWT ที่ถอดรหัสแล้ว
+          if grep -rIn --include='*.ts' --include='*.tsx' --include='*.js' \
+               --include='*.html' --include='*.json' --include='*.env*' \
+               --exclude-dir=.git --exclude-dir=.github --exclude-dir=node_modules \
+               -E 'sb_secret_[A-Za-z0-9_-]{10,}|SUPABASE_SERVICE_ROLE_KEY[[:space:]]*[:=][[:space:]]*.[A-Za-z0-9]|"role"[[:space:]]*:[[:space:]]*"service_role"' . ; then
+            echo "::error::พบคีย์ลับระดับเซิร์ฟเวอร์ในไฟล์ที่จะเผยแพร่ — ลบออกและหมุนเวียนคีย์ทันที"
+            exit 1
+          fi
+          echo "ผ่าน: ไม่พบคีย์ลับ"
+
+      - name: ตรวจว่าไม่มีไฟล์ข้อมูลหรือเอกสารภายในหลุดเข้ามาใน repo
+        run: |
+          # repo นี้เป็นสาธารณะ — ไฟล์ข้อมูลและเอกสารภายในห้ามอยู่ที่นี่
+          FOUND=$(find . -path ./.git -prune -o -path ./node_modules -prune -o \
+                    \( -iname '*.csv' -o -iname '*.xlsx' -o -iname '*.xls' \
+                       -o -iname '*.pdf' -o -iname '*.docx' -o -iname '*.dump' \
+                       -o -iname '*.gpg' \) -print)
+          if [ -n "$FOUND" ]; then
+            echo "::error::พบไฟล์ที่ไม่ควรเผยแพร่:"
+            echo "$FOUND"
+            echo "::error::ย้ายออกนอกโฟลเดอร์ repo แล้ว commit ใหม่"
+            exit 1
+          fi
+          echo "ผ่าน: ไม่พบไฟล์ข้อมูลหรือเอกสารภายใน"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run lint
+
+      - name: build
+        env:
+          # anon key (publishable) ออกแบบมาให้เปิดเผยได้ ความปลอดภัยจริงอยู่ที่ RLS
+          # เก็บใน GitHub Secrets เพื่อให้เปลี่ยนได้โดยไม่ต้องแก้โค้ด ไม่ใช่เพราะเป็นความลับ
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_ANON_KEY" ]; then
+            echo "::error::ยังไม่ได้ตั้ง Secrets: VITE_SUPABASE_URL และ VITE_SUPABASE_ANON_KEY"
+            echo "::error::ตั้งที่ Settings → Secrets and variables → Actions"
+            exit 1
+          fi
+          npm run build
+
+      - name: กันไฟล์ .nojekyll หาย
+        run: touch dist/.nojekyll
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,24 @@
+node_modules
+dist
+.env
+.env.local
+.env.*.local
+*.log
+.DS_Store
+.vscode
+
+# ── repo นี้เป็นสาธารณะ ──────────────────────────────────────────
+# เอกสารภายในและไฟล์ข้อมูลห้ามขึ้น GitHub
+# (workflow deploy.yml ตรวจซ้ำอีกชั้นและจะหยุด deploy ถ้าเจอ)
+_private/
+*.pdf
+*.csv
+*.xlsx
+*.xls
+*.docx
+TCMS-BCNB.md
+
+# ไฟล์สำรองฐานข้อมูล
+backup/
+*.dump
+*.gpg
