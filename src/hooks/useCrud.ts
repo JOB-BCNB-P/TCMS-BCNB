@@ -127,3 +127,43 @@ export function useLookups() {
     },
   })
 }
+
+/**
+ * ซิงก์ตารางเชื่อมแบบหลายต่อหลาย (เช่น สาขาวิชาที่ร่วมดูแลรายวิชา)
+ *
+ * เทียบของเดิมกับของใหม่แล้วเพิ่ม/ลบเฉพาะส่วนต่าง ไม่ลบทิ้งทั้งหมดแล้วใส่ใหม่
+ * เพราะการลบทิ้งจะทำให้ audit เต็มไปด้วยรายการลบ-เพิ่มที่ไม่ได้เปลี่ยนอะไรจริง
+ * และถ้าคำสั่งที่สองพลาด ข้อมูลจะหายทั้งชุด
+ */
+export async function syncLinkTable(opts: {
+  table: string
+  parentColumn: string
+  parentId: string
+  childColumn: string
+  /** ค่าที่ต้องการให้เหลืออยู่หลังซิงก์ */
+  want: string[]
+  /** ค่าที่ห้ามลบ เช่น สาขาเจ้าภาพ ซึ่ง trigger ในฐานข้อมูลจะใส่กลับมาอยู่ดี */
+  keep?: string[]
+}): Promise<void> {
+  const { table, parentColumn, parentId, childColumn, keep = [] } = opts
+  const want = [...new Set([...opts.want, ...keep])]
+
+  const { data: current, error: readErr } = await supabase
+    .from(table).select(childColumn).eq(parentColumn, parentId)
+  if (readErr) throw readErr
+
+  const have = (current ?? []).map((r) => (r as unknown as Record<string, unknown>)[childColumn] as string)
+  const toAdd = want.filter((v) => !have.includes(v))
+  const toDel = have.filter((v) => !want.includes(v))
+
+  if (toAdd.length > 0) {
+    const { error } = await supabase.from(table)
+      .insert(toAdd.map((v) => ({ [parentColumn]: parentId, [childColumn]: v })))
+    if (error) throw error
+  }
+  if (toDel.length > 0) {
+    const { error } = await supabase.from(table)
+      .delete().eq(parentColumn, parentId).in(childColumn, toDel)
+    if (error) throw error
+  }
+}

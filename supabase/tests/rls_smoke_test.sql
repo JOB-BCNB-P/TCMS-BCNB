@@ -576,3 +576,89 @@ begin
   perform pg_temp.check('33 อาจารย์เพิ่มผู้รับเงินไม่ได้', ok);
   reset role;
 end $$;
+
+-- =====================================================================
+-- การทดสอบหลายสาขาวิชาต่อรายวิชา/ผู้ประสานงาน/แหล่งฝึก (migration 0011)
+-- =====================================================================
+do $$
+declare n int; ok boolean;
+        v_ped uuid; v_adu uuid; v_com uuid;
+        v_shared uuid; v_site_all uuid; v_site_adu uuid; v_coord uuid;
+begin
+  select id into v_ped from public.departments where code = 'PED';
+  select id into v_adu from public.departments where code = 'ADU';
+  select id into v_com from public.departments where code = 'COM';
+
+  -- รายวิชาเจ้าภาพ = ผู้ใหญ่ แต่สาขาเด็กร่วมดูแล
+  insert into public.courses (code, name_th, course_kind, department_id)
+  values ('SHARED101', 'รายวิชาร่วมสองสาขา', 'theory', v_adu) returning id into v_shared;
+  insert into public.course_departments (course_id, department_id)
+  values (v_shared, v_ped) on conflict do nothing;
+
+  -- แหล่งฝึกกลาง (ไม่ผูกสาขา) และแหล่งฝึกเฉพาะสาขาผู้ใหญ่
+  insert into public.clinical_sites (name_th, ward) values ('แหล่งฝึกกลาง', 'ทุกสาขา')
+  returning id into v_site_all;
+  insert into public.clinical_sites (name_th, ward, department_id)
+  values ('แหล่งฝึกเฉพาะผู้ใหญ่', 'อายุรกรรม', v_adu) returning id into v_site_adu;
+
+  -- ผู้ประสานงานเจ้าภาพสาขาชุมชน แต่ดูแลสาขาเด็กด้วย
+  insert into public.coordinators (first_name, last_name, department_id)
+  values ('ผู้ประสาน', 'สองสาขา', v_com) returning id into v_coord;
+  insert into public.coordinator_departments (coordinator_id, department_id)
+  values (v_coord, v_ped) on conflict do nothing;
+
+  -- 34. เลขานุการสาขาเด็กเห็นรายวิชาที่ร่วมดูแล แม้ไม่ใช่เจ้าภาพ -----------------
+  perform pg_temp.as_user('sec1.test@bcn.ac.th');   -- ดูแล PED, MAT, PSY
+  set local role authenticated;
+  select count(*) into n from public.courses where id = v_shared;
+  perform pg_temp.check('34 เลขานุการสาขาที่ร่วมดูแล เห็นรายวิชาที่ไม่ใช่ของตนเป็นเจ้าภาพ', n = 1);
+
+  -- 35. แต่เปลี่ยนสาขาเจ้าภาพเองไม่ได้ ----------------------------------------
+  begin
+    update public.courses set department_id = v_ped where id = v_shared;
+    ok := false;
+  exception when others then ok := true;
+  end;
+  perform pg_temp.check('35 เลขานุการสาขาร่วมดูแล เปลี่ยนสาขาเจ้าภาพไม่ได้', ok);
+
+  -- 36. แก้ข้อมูลอื่นของรายวิชาที่ร่วมดูแลได้ -----------------------------------
+  update public.courses set name_th = 'รายวิชาร่วมสองสาขา (แก้ไขแล้ว)' where id = v_shared;
+  get diagnostics n = row_count;
+  perform pg_temp.check('36 เลขานุการสาขาร่วมดูแล แก้ชื่อรายวิชาได้', n = 1);
+
+  -- 37. แหล่งฝึกกลางที่ไม่ผูกสาขา ทุกสาขาเห็น ---------------------------------
+  select count(*) into n from public.clinical_sites where id = v_site_all;
+  perform pg_temp.check('37 แหล่งฝึกกลางที่ไม่ผูกสาขา เลขานุการทุกสาขาเห็น', n = 1);
+
+  -- 38. แหล่งฝึกที่ผูกสาขาอื่น ต้องมองไม่เห็น ----------------------------------
+  select count(*) into n from public.clinical_sites where id = v_site_adu;
+  perform pg_temp.check('38 แหล่งฝึกที่ผูกเฉพาะสาขาอื่น มองไม่เห็น', n = 0);
+
+  -- 39. ผู้ประสานงานที่ดูแลหลายสาขา เห็นได้จากทุกสาขาที่ผูกไว้ -------------------
+  select count(*) into n from public.coordinators where id = v_coord;
+  perform pg_temp.check('39 ผู้ประสานงานที่ผูกหลายสาขา เห็นได้จากสาขาที่ร่วม', n = 1);
+  reset role;
+
+  -- 40. เลขานุการอีกคน (ผู้ใหญ่+ชุมชน) ก็เห็นรายวิชาร่วมเพราะเป็นเจ้าภาพ ---------
+  perform pg_temp.as_user('sec2.test@bcn.ac.th');   -- ดูแล ADU, COM
+  set local role authenticated;
+  select count(*) into n from public.courses where id = v_shared;
+  perform pg_temp.check('40 เลขานุการสาขาเจ้าภาพเห็นรายวิชาของตน', n = 1);
+  select count(*) into n from public.clinical_sites where id = v_site_adu;
+  perform pg_temp.check('41 เลขานุการสาขาเจ้าของแหล่งฝึกเห็นแหล่งฝึกของตน', n = 1);
+  reset role;
+
+  -- 42. อาจารย์ (อ่านอย่างเดียว สาขาเด็ก) เห็นรายวิชาที่สาขาตนร่วมดูแล ----------
+  perform pg_temp.as_user('ins.test@bcn.ac.th');
+  set local role authenticated;
+  select count(*) into n from public.courses where id = v_shared;
+  perform pg_temp.check('42 อาจารย์เห็นรายวิชาที่สาขาตนร่วมดูแล', n = 1);
+  begin
+    update public.courses set name_th = 'อาจารย์แก้ไม่ได้' where id = v_shared;
+    get diagnostics n = row_count;
+    ok := (n = 0);
+  exception when others then ok := true;
+  end;
+  perform pg_temp.check('43 อาจารย์แก้ไขรายวิชาไม่ได้', ok);
+  reset role;
+end $$;

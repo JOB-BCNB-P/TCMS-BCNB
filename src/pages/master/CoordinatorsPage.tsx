@@ -1,5 +1,5 @@
 import { CrudPage } from '@/components/CrudPage'
-import { useLookups } from '@/hooks/useCrud'
+import { syncLinkTable, useLookups } from '@/hooks/useCrud'
 import { fullName } from '@/lib/format'
 
 interface Coordinator {
@@ -11,6 +11,7 @@ interface Coordinator {
   department_id: string
   is_active: boolean
   departments: { name_th: string } | null
+  coordinator_departments: { department_id: string }[]
 }
 
 export function CoordinatorsPage() {
@@ -25,15 +26,34 @@ export function CoordinatorsPage() {
       description='คนเดียวกับ "ผู้จัดทำ" ที่จะลงนามในใบหลักฐานการเบิกจ่ายค่าสอนพิเศษ'
       menuKey="master.coord"
       table="coordinators"
-      select="id, prefix, first_name, last_name, position_title, department_id, is_active, departments(name_th)"
+      select="id, prefix, first_name, last_name, position_title, department_id, is_active, departments(name_th), coordinator_departments(department_id)"
       orderBy="first_name"
       label="ผู้ประสานงานรายวิชา"
       loadingExtra={lookups.isLoading}
       searchFields={(r) => `${r.first_name} ${r.last_name} ${r.position_title ?? ''}`}
+      afterSave={async (row, values) =>
+        syncLinkTable({
+          table: 'coordinator_departments',
+          parentColumn: 'coordinator_id',
+          parentId: row.id,
+          childColumn: 'department_id',
+          want: (values.co_department_ids as string[] | undefined) ?? [],
+          keep: values.department_id ? [String(values.department_id)] : [],
+        })
+      }
       columns={[
         { key: 'name', header: 'คำนำหน้า ชื่อ-สกุล', render: (r) => fullName(r.prefix, r.first_name, r.last_name) },
         { key: 'pos', header: 'ตำแหน่ง', render: (r) => r.position_title ?? '-' },
-        { key: 'dept', header: 'สาขาวิชา', hideOnMobile: true, render: (r) => r.departments?.name_th ?? '-' },
+        { key: 'dept', header: 'สาขาหลัก', hideOnMobile: true, render: (r) => r.departments?.name_th ?? '-' },
+        {
+          key: 'codept', header: 'สาขาอื่นที่ดูแล', hideOnMobile: true,
+          render: (r) => {
+            const others = (r.coordinator_departments ?? [])
+              .map((d) => d.department_id).filter((id) => id !== r.department_id)
+            if (others.length === 0) return <span className="text-slate-400">—</span>
+            return deptOptions.filter((o) => others.includes(o.value)).map((o) => o.label).join(', ')
+          },
+        },
         {
           key: 'active', header: 'สถานะ',
           render: (r) => r.is_active
@@ -49,18 +69,36 @@ export function CoordinatorsPage() {
           name: 'position_title', label: 'ตำแหน่ง', type: 'text',
           help: 'พิมพ์ลงช่อง "ตำแหน่ง" ใต้ลายมือชื่อผู้จัดทำในแบบฟอร์ม',
         },
-        { name: 'department_id', label: 'สาขาวิชา', type: 'select', required: true, options: deptOptions },
+        { name: 'department_id', label: 'สาขาหลัก', type: 'select', required: true, options: deptOptions },
+        {
+          name: 'co_department_ids', label: 'สาขาอื่นที่ดูแล', type: 'multiselect',
+          options: deptOptions, wide: true,
+          help: 'ติ๊กเพิ่มถ้าผู้ประสานงานคนนี้ดูแลมากกว่าหนึ่งสาขา (สาขาหลักถูกนับให้อัตโนมัติ)',
+        },
         { name: 'is_active', label: 'สถานะ', type: 'checkbox', placeholder: 'เปิดใช้งาน' },
       ]}
       toForm={(r) => ({
         prefix: r?.prefix ?? '', first_name: r?.first_name ?? '', last_name: r?.last_name ?? '',
         position_title: r?.position_title ?? '', department_id: r?.department_id ?? '',
         is_active: r?.is_active ?? true,
+        co_department_ids: r?.coordinator_departments?.map((d) => d.department_id) ?? [],
       })}
+      fromForm={(v) => {
+        const { co_department_ids: _ignored, ...rest } = v
+        void _ignored
+        return rest
+      }}
       exportColumns={[
         { key: 'name', header: 'คำนำหน้า ชื่อ-สกุล', value: (r) => fullName(r.prefix, r.first_name, r.last_name) },
         { key: 'pos', header: 'ตำแหน่ง', value: (r) => r.position_title ?? '' },
-        { key: 'dept', header: 'สาขาวิชา', value: (r) => r.departments?.name_th ?? '' },
+        { key: 'dept', header: 'สาขาหลัก', value: (r) => r.departments?.name_th ?? '' },
+        {
+          key: 'codept', header: 'สาขาอื่นที่ดูแล',
+          value: (r) => deptOptions
+            .filter((o) => (r.coordinator_departments ?? []).some((d) => d.department_id === o.value)
+                        && o.value !== r.department_id)
+            .map((o) => o.label).join(' / '),
+        },
       ]}
     />
   )

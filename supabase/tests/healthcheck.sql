@@ -39,12 +39,19 @@ with c as (
   union all select '*** ตาราง audit (ห้ามลบได้) ***',
          (select count(*) from pg_tables where schemaname='audit')::int, 2
   union all select 'RLS policy ทั้งหมด',
-         (select count(*) from pg_policies where schemaname='public')::int, 68
+         (select count(*) from pg_policies where schemaname='public')::int, 80
   union all select '*** ตารางที่เปิด RLS แต่ไม่มี policy เลย (เข้าถึงไม่ได้) ***',
          (select count(*) from pg_tables t
            where t.schemaname='public'
              and not exists (select 1 from pg_policies p
                              where p.schemaname='public' and p.tablename=t.tablename))::int, 0
+  union all select 'ตารางเชื่อมหลายสาขา (course/coordinator/site)',
+         (select count(*) from pg_tables where schemaname='public'
+           and tablename in ('course_departments','coordinator_departments','clinical_site_departments'))::int, 3
+  union all select '*** สาขาเจ้าภาพที่หายไปจากตารางเชื่อมรายวิชา (ต้องเป็น 0) ***',
+         (select count(*) from public.courses c
+           where not exists (select 1 from public.course_departments cd
+                             where cd.course_id = c.id and cd.department_id = c.department_id))::int, 0
   union all select '*** policy FOR ALL บนตารางผู้รับเงิน (ต้องไม่มี) ***',
          (select count(*) from pg_policies
            where schemaname='public' and tablename='payees' and cmd='ALL')::int, 0

@@ -1,6 +1,6 @@
 import { CrudPage } from '@/components/CrudPage'
 import { BankAccountField } from '@/components/BankAccountField'
-import { useLookups } from '@/hooks/useCrud'
+import { syncLinkTable, useLookups } from '@/hooks/useCrud'
 
 interface Site {
   id: string
@@ -12,6 +12,7 @@ interface Site {
   has_bank_account: boolean
   is_active: boolean
   departments: { name_th: string } | null
+  clinical_site_departments: { department_id: string }[]
 }
 
 export function SitesPage() {
@@ -27,16 +28,35 @@ export function SitesPage() {
       description="สถานที่ที่นักศึกษาไปฝึกภาคปฏิบัติ — ผู้รับค่าตอบแทนแหล่งฝึกคือหน่วยงาน ไม่ใช่บุคคล"
       menuKey="master.site"
       table="clinical_sites"
-      select="id, name_th, ward, province, department_id, phone, has_bank_account, is_active, departments(name_th)"
+      select="id, name_th, ward, province, department_id, phone, has_bank_account, is_active, departments(name_th), clinical_site_departments(department_id)"
       orderBy="name_th"
       label="แหล่งฝึก"
       loadingExtra={lookups.isLoading}
       searchFields={(r) => `${r.name_th} ${r.ward ?? ''} ${r.province ?? ''}`}
+      afterSave={async (row, values) =>
+        syncLinkTable({
+          table: 'clinical_site_departments',
+          parentColumn: 'clinical_site_id',
+          parentId: row.id,
+          childColumn: 'department_id',
+          want: (values.co_department_ids as string[] | undefined) ?? [],
+          keep: values.department_id ? [String(values.department_id)] : [],
+        })
+      }
       columns={[
         { key: 'name', header: 'ชื่อสถานที่', render: (r) => <span className="font-medium">{r.name_th}</span> },
         { key: 'ward', header: 'Ward', render: (r) => r.ward ?? '-' },
         { key: 'province', header: 'จังหวัด', hideOnMobile: true, render: (r) => r.province ?? '-' },
-        { key: 'dept', header: 'สาขาวิชา', hideOnMobile: true, render: (r) => r.departments?.name_th ?? '-' },
+        {
+          key: 'dept', header: 'สาขาที่ใช้', hideOnMobile: true,
+          render: (r) => {
+            const ids = (r.clinical_site_departments ?? []).map((d) => d.department_id)
+            if (ids.length === 0) {
+              return <span className="text-brand-700 dark:text-brand-300">ใช้ร่วมทุกสาขา</span>
+            }
+            return deptOptions.filter((o) => ids.includes(o.value)).map((o) => o.label).join(', ')
+          },
+        },
         {
           key: 'bank', header: 'เลขบัญชี', align: 'center',
           render: (r) => r.has_bank_account
@@ -51,8 +71,13 @@ export function SitesPage() {
         { name: 'ward', label: 'Ward', type: 'text' },
         { name: 'province', label: 'จังหวัด', type: 'text' },
         {
-          name: 'department_id', label: 'สาขาวิชาที่รับผิดชอบ', type: 'select', options: deptOptions,
-          help: 'ถ้าเว้นว่าง ทุกสาขาวิชาจะมองเห็นแหล่งฝึกนี้',
+          name: 'department_id', label: 'สาขาหลักที่รับผิดชอบ', type: 'select', options: deptOptions,
+          help: 'เว้นว่างได้ถ้าเป็นแหล่งฝึกกลางที่ทุกสาขาใช้ร่วมกัน',
+        },
+        {
+          name: 'co_department_ids', label: 'สาขาอื่นที่ใช้แหล่งฝึกนี้', type: 'multiselect',
+          options: deptOptions, wide: true,
+          help: 'ติ๊กเฉพาะสาขาที่ใช้จริง — ถ้าไม่ติ๊กเลยและเว้นสาขาหลักว่างไว้ ทุกสาขาจะเห็นแหล่งฝึกนี้',
         },
         { name: 'phone', label: 'เบอร์โทรศัพท์', type: 'text' },
         { name: 'is_active', label: 'สถานะ', type: 'checkbox', placeholder: 'เปิดใช้งาน' },
@@ -60,7 +85,13 @@ export function SitesPage() {
       toForm={(r) => ({
         name_th: r?.name_th ?? '', ward: r?.ward ?? '', province: r?.province ?? '',
         department_id: r?.department_id ?? '', phone: r?.phone ?? '', is_active: r?.is_active ?? true,
+        co_department_ids: r?.clinical_site_departments?.map((d) => d.department_id) ?? [],
       })}
+      fromForm={(v) => {
+        const { co_department_ids: _ignored, ...rest } = v
+        void _ignored
+        return rest
+      }}
       renderExtra={(row) => (
         <BankAccountField
           ownerType="clinical_site"
@@ -83,7 +114,15 @@ export function SitesPage() {
         { key: 'name', header: 'ชื่อสถานที่', value: (r) => r.name_th },
         { key: 'ward', header: 'Ward', value: (r) => r.ward ?? '' },
         { key: 'province', header: 'จังหวัด', value: (r) => r.province ?? '' },
-        { key: 'dept', header: 'สาขาวิชา', value: (r) => r.departments?.name_th ?? '' },
+        {
+          key: 'dept', header: 'สาขาที่ใช้',
+          value: (r) => {
+            const ids = (r.clinical_site_departments ?? []).map((d) => d.department_id)
+            return ids.length === 0
+              ? 'ใช้ร่วมทุกสาขา'
+              : deptOptions.filter((o) => ids.includes(o.value)).map((o) => o.label).join(' / ')
+          },
+        },
         { key: 'bank', header: 'มีเลขบัญชีแล้ว', value: (r) => (r.has_bank_account ? 'มี' : 'ยังไม่มี') },
       ]}
     />
