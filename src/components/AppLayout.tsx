@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthProvider'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useTheme } from '@/hooks/useTheme'
 import { LogoutDialog } from './LogoutDialog'
+import { useIdleLogout } from '@/hooks/useIdleLogout'
+import { useToast } from './Toast'
 import { ROLE_LABEL } from '@/lib/types'
 
 export function AppLayout() {
@@ -13,6 +15,14 @@ export function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [logoutOpen, setLogoutOpen] = useState(false)
   const location = useLocation()
+  const toast = useToast()
+
+  // ออกจากระบบอัตโนมัติเมื่อไม่ได้ใช้งาน — ทดแทน Inactivity timeout ที่เป็น Pro-only
+  const onIdleTimeout = useCallback(() => {
+    void signOut()
+    toast.info('ออกจากระบบอัตโนมัติ เนื่องจากไม่มีการใช้งานเป็นเวลา 30 นาที')
+  }, [signOut, toast])
+  const idle = useIdleLogout(!!user, onIdleTimeout)
 
   return (
     <div className="min-h-dvh bg-brand-50 dark:bg-slate-950">
@@ -122,6 +132,38 @@ export function AppLayout() {
           <Outlet />
         </main>
       </div>
+
+      {idle.warning && (
+        <div
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="idle-title"
+          className="no-print fixed inset-0 z-[58] flex items-center justify-center bg-slate-900/50 p-4"
+        >
+          <div className="card w-full max-w-sm p-6">
+            <h2 id="idle-title" className="text-base font-semibold text-slate-900 dark:text-white">
+              กำลังจะออกจากระบบอัตโนมัติ
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+              ไม่มีการใช้งานมาสักพัก ระบบจะออกจากระบบให้ใน{' '}
+              <span className="font-semibold tabular-nums">{idle.secondsLeft}</span> วินาที
+              เพื่อไม่ให้ข้อมูลค้างบนหน้าจอเมื่อไม่มีคนอยู่ที่เครื่อง
+            </p>
+            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => { setLogoutOpen(false); void signOut() }}
+              >
+                ออกจากระบบเลย
+              </button>
+              <button type="button" className="btn-primary sm:min-w-[150px]" onClick={idle.reset} autoFocus>
+                ยังใช้งานอยู่
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <LogoutDialog
         open={logoutOpen}

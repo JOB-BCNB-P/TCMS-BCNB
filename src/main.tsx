@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 // ใช้ HashRouter เพราะ GitHub Pages เป็นโฮสต์ไฟล์นิ่ง ไม่มีการ rewrite เส้นทาง
 // ถ้าใช้ BrowserRouter ผู้ใช้ที่กด refresh หรือเปิดลิงก์ลึกจะเจอหน้า 404 ของ GitHub
 import { AuthProvider } from '@/auth/AuthProvider'
+import { ToastProvider } from '@/components/Toast'
 import App from './App'
 import './index.css'
 
@@ -22,9 +23,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <HashRouter>
       <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <App />
-        </AuthProvider>
+        <ToastProvider>
+          <AuthProvider>
+            <App />
+          </AuthProvider>
+        </ToastProvider>
       </QueryClientProvider>
     </HashRouter>
   </React.StrictMode>,

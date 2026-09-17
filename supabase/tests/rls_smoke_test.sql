@@ -527,3 +527,52 @@ begin
   perform pg_temp.check('29 เจ้าหน้าที่การเงินแก้ตารางอัตราไม่ได้', ok);
   reset role;
 end $$;
+
+-- =====================================================================
+-- การทดสอบการมองเห็นผู้รับเงินที่เพิ่งสร้าง (migration 0010)
+-- จำลองลำดับที่หน้าเว็บทำจริง: insert แล้วอ่านกลับทันที ก่อนผูกสาขาวิชา
+-- =====================================================================
+do $$
+declare n int; ok boolean; v_new uuid; v_adu uuid; v_other uuid;
+begin
+  select id into v_adu from public.departments where code = 'ADU';
+
+  -- 30. เลขานุการเพิ่มผู้รับเงินใหม่ แล้วอ่านกลับได้ทันที -----------------------
+  perform pg_temp.as_user('sec1.test@bcn.ac.th');
+  set local role authenticated;
+  insert into public.payees (payee_kind, first_name, last_name)
+  values ('special_lecturer', 'เพิ่งสร้าง', 'ยังไม่ผูกสาขา')
+  returning id into v_new;
+  select count(*) into n from public.payees where id = v_new;
+  perform pg_temp.check('30 เพิ่มผู้รับเงินแล้วอ่านกลับได้ทันทีก่อนผูกสาขา', n = 1);
+
+  -- ผูกสาขาให้เป็นของอีกสาขาหนึ่งที่เลขานุการคนนี้ไม่ได้ดูแล
+  reset role;
+  insert into public.payee_departments (payee_id, department_id) values (v_new, v_adu);
+
+  -- 31. พอผูกเป็นสาขาอื่นแล้ว ต้องมองไม่เห็นอีก ------------------------------
+  perform pg_temp.as_user('sec1.test@bcn.ac.th');
+  set local role authenticated;
+  select count(*) into n from public.payees where id = v_new;
+  perform pg_temp.check('31 ผูกเป็นสาขาอื่นแล้ว เลขานุการคนนี้มองไม่เห็น', n = 0);
+  reset role;
+
+  -- 32. อาจารย์ (อ่านอย่างเดียว) ไม่เห็นผู้รับเงินที่ยังไม่ผูกสาขา ---------------
+  reset role;
+  insert into public.payees (payee_kind, first_name, last_name)
+  values ('preceptor', 'ไม่ผูก', 'สาขา2') returning id into v_other;
+  perform pg_temp.as_user('ins.test@bcn.ac.th');
+  set local role authenticated;
+  select count(*) into n from public.payees where id = v_other;
+  perform pg_temp.check('32 อาจารย์ไม่เห็นผู้รับเงินที่ยังไม่ผูกสาขา', n = 0);
+
+  -- 33. อาจารย์เพิ่มผู้รับเงินไม่ได้ ------------------------------------------
+  begin
+    insert into public.payees (payee_kind, first_name, last_name)
+    values ('special_lecturer', 'ห้าม', 'เพิ่ม');
+    ok := false;
+  exception when others then ok := true;
+  end;
+  perform pg_temp.check('33 อาจารย์เพิ่มผู้รับเงินไม่ได้', ok);
+  reset role;
+end $$;

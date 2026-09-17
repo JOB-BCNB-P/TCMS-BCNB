@@ -52,6 +52,34 @@ jobs:
             $PSQL -d postgres -q -f "$f"
           done
 
+      - name: ด่านโครงสร้าง — ทุกตารางใน public ต้องเปิด RLS และมี policy
+        run: |
+          # ด่านนี้สำคัญเพราะ Supabase ตั้ง "Automatically expose new tables" ไว้
+          # ตารางใหม่จะถูกเปิดผ่าน API ทันที ถ้า migration ลืมเปิด RLS
+          # ข้อมูลจะรั่วแบบเงียบ ๆ โดยไม่มีอะไรฟ้อง
+          NO_RLS=$($PSQL -d postgres -tA -c "
+            select coalesce(string_agg(t.tablename, ', '), '')
+            from pg_tables t
+            join pg_class c on c.relname = t.tablename
+            join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'public'
+            where t.schemaname = 'public' and not c.relrowsecurity;")
+          if [ -n "$NO_RLS" ]; then
+            echo "::error::ตารางเหล่านี้ยังไม่เปิด RLS: $NO_RLS"
+            exit 1
+          fi
+
+          NO_POLICY=$($PSQL -d postgres -tA -c "
+            select coalesce(string_agg(t.tablename, ', '), '')
+            from pg_tables t
+            where t.schemaname = 'public'
+              and not exists (select 1 from pg_policies p
+                              where p.schemaname = 'public' and p.tablename = t.tablename);")
+          if [ -n "$NO_POLICY" ]; then
+            echo "::error::ตารางเหล่านี้เปิด RLS แต่ไม่มี policy เลย จะเข้าถึงไม่ได้: $NO_POLICY"
+            exit 1
+          fi
+          echo "ผ่าน: ทุกตารางใน public เปิด RLS และมี policy ครบ"
+
       - name: รันชุดทดสอบความปลอดภัย
         run: |
           $PSQL -d postgres -f supabase/tests/rls_smoke_test.sql 2>&1 | tee /tmp/out.txt
