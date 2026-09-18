@@ -36,7 +36,20 @@ export function useCrud<T extends { id: string }>(opts: Options) {
     },
   })
 
-  const invalidate = () => void qc.invalidateQueries({ queryKey: [opts.table] })
+  /**
+   * คีย์ของ query ที่ "ประกอบจาก" หลายตาราง จึงไม่ถูก invalidate ด้วยชื่อตาราง
+   *
+   * ['lookups'] ตั้ง staleTime ไว้ 5 นาที ถ้าไม่ล้างที่นี่ ผู้ใช้จะเพิ่มรายวิชาที่เปิดสอน
+   * แล้วไปสร้างใบเบิกทันทีโดยไม่เห็นรายการที่เพิ่งเพิ่ม และหน้าจอจะบอกว่า "ยังไม่มี"
+   */
+  const DERIVED_KEYS = ['lookups', 'offering-extra', 'courses-for-offering']
+
+  const invalidate = () => {
+    void qc.invalidateQueries({ queryKey: [opts.table] })
+    void qc.invalidateQueries({
+      predicate: (q) => DERIVED_KEYS.includes(String(q.queryKey[0])),
+    })
+  }
 
   const create = useMutation({
     mutationFn: async (row: Record<string, unknown>) => {

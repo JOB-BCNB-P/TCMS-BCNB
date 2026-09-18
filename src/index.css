@@ -63,6 +63,10 @@
 }
 
 /* การพิมพ์เอกสารราชการ: ซ่อนส่วนติดต่อผู้ใช้ทั้งหมด */
+.print-only {
+  display: none;
+}
+
 @media print {
   .no-print {
     display: none !important;
@@ -71,4 +75,48 @@
     background: #fff !important;
     color: #000 !important;
   }
+  .print-only {
+    display: block;
+  }
+  /* เอกสารราชการพิมพ์ขาวดำเสมอ ไม่ให้ธีมมืดติดไปกับกระดาษ */
+  .print-doc,
+  .print-doc * {
+    background: #fff !important;
+    color: #000 !important;
+    border-color: #000 !important;
+  }
+  .print-page {
+    break-after: page;
+  }
+  .print-page:last-child {
+    break-after: auto;
+  }
+  tr,
+  td,
+  th {
+    break-inside: avoid;
+  }
+}
+
+/* ตารางในแบบฟอร์มราชการ: เส้นทึบ ตัวอักษรเล็ก */
+.form-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.form-table th,
+.form-table td {
+  border: 1px solid #000;
+  padding: 2px 4px;
+  vertical-align: top;
+}
+.form-table th {
+  text-align: center;
+  font-weight: 500;
+}
+.form-fill {
+  border-bottom: 1px dotted #000;
+  display: inline-block;
+  min-width: 4rem;
+  padding: 0 4px;
 }

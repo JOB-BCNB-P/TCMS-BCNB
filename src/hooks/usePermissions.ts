@@ -17,6 +17,7 @@ export const MENU_TREE: MenuNode[] = [
     path: '/master',
     children: [
       { key: 'master.course', label: 'รายวิชา', path: '/master/courses' },
+      { key: 'master.offering', label: 'รายวิชาที่เปิดสอน', path: '/master/offerings' },
       { key: 'master.lecturer', label: 'อาจารย์พิเศษ', path: '/master/lecturers' },
       { key: 'master.preceptor', label: 'อาจารย์แหล่งฝึก', path: '/master/preceptors' },
       { key: 'master.coord', label: 'ผู้ประสานงานรายวิชา', path: '/master/coordinators' },

@@ -16,6 +16,7 @@ interface Props<T extends { id: string }> {
   table: string
   select: string
   orderBy?: string
+  ascending?: boolean
   label: string
   /** ตัวกรองแบบ eq เช่น payee_kind — ใช้แยกอาจารย์พิเศษกับอาจารย์แหล่งฝึกที่อยู่ตารางเดียวกัน */
   filters?: Record<string, string>
@@ -40,13 +41,13 @@ interface Props<T extends { id: string }> {
 }
 
 export function CrudPage<T extends { id: string }>({
-  title, description, menuKey, table, select, orderBy, label,
+  title, description, menuKey, table, select, orderBy, ascending, label,
   filters, defaults, afterSave,
   columns, fields, toForm, fromForm, csv, renderExtra, searchFields,
   exportColumns, loadingExtra,
 }: Props<T>) {
   const { can } = usePermissions()
-  const crud = useCrud<T>({ table, select, orderBy, label, filters })
+  const crud = useCrud<T>({ table, select, orderBy, ascending, label, filters })
   const [savingExtra, setSavingExtra] = useState(false)
   const [editing, setEditing] = useState<T | null | undefined>(undefined) // undefined = ปิด, null = เพิ่มใหม่
   const [deleting, setDeleting] = useState<T | null>(null)

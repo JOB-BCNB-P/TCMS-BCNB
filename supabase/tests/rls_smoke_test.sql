@@ -218,8 +218,9 @@ begin
   -- 9. ส่งเอกสารโดยยังไม่ติ๊กเช็คลิสต์ไม่ได้ ---------------------------------
   perform pg_temp.as_user('sec1.test@bcn.ac.th');
   set local role authenticated;
-  insert into public.voucher_checklists (voucher_id, item_key)
-  select v_voucher, key from public.checklist_items;
+  -- trigger ใน migration 0015 สร้างแถวเช็คลิสต์ให้ตอน insert ใบสำคัญแล้ว
+  select count(*) into n from public.voucher_checklists where voucher_id = v_voucher;
+  perform pg_temp.check('8d เช็คลิสต์เอกสารแนบถูกสร้างให้อัตโนมัติ 7 รายการ', n = 7);
   begin
     perform public.set_voucher_status(v_voucher, 'submitted');
     ok := false;
@@ -336,8 +337,7 @@ begin
   insert into public.voucher_lines (voucher_id, line_no, payee_id, budget_category_id,
                                     expense_item, hours, rate, amount)
   values (v_v2, 1, v_payee, v_cat, 'theory', 5, 400, 2000);
-  insert into public.voucher_checklists (voucher_id, item_key, is_checked)
-  select v_v2, key, true from public.checklist_items;
+  update public.voucher_checklists set is_checked = true where voucher_id = v_v2;
 
   perform public.set_voucher_status(v_v2, 'submitted');
   begin
@@ -392,9 +392,13 @@ begin
   begin
     insert into public.treasury_cover_sheet_items
       (sheet_id, voucher_id, line_no, teacher_name, subject_text, amount, subtotal)
-    values (v_sheet, v_v2, 1, 'ทดสอบ ระบบ', 'PED101', 2000, 2000);
+    values (v_sheet, v_v2, 1, 'ทดสอบ ระบบ', 'PED101',
+            (select total_amount from public.payment_vouchers where id = v_v2),
+            (select total_amount from public.payment_vouchers where id = v_v2));
     ok := false;
-  exception when others then ok := true;
+  -- ต้องถูกปฏิเสธด้วยเหตุ "แบ่งแยกหน้าที่" เท่านั้น ไม่ใช่เพราะยอดไม่ตรงหรือปีงบไม่ตรง
+  -- (migration 0013 เพิ่ม guard อีกหลายข้อบนตารางเดียวกัน)
+  exception when others then ok := (sqlerrm like '%แบ่งแยกหน้าที่%');
   end;
   perform pg_temp.check('21 ผู้จัดทำใบสำคัญนำใบของตนขึ้นหน้างบที่ตนทำเองไม่ได้', ok);
   reset role;
@@ -661,4 +665,322 @@ begin
   end;
   perform pg_temp.check('43 อาจารย์แก้ไขรายวิชาไม่ได้', ok);
   reset role;
+end $$;
+
+-- =====================================================================
+-- การทดสอบหน้างบใบสำคัญฯ ประกอบฎีกา (migration 0013)
+-- =====================================================================
+do $$
+declare
+  v_ped uuid; v_cat uuid; v_payee uuid; v_ay uuid; v_sem uuid;
+  v_fy69 uuid; v_fy70 uuid; v_course uuid; v_off uuid;
+  v_vch_ok uuid; v_vch_draft uuid;
+  v_sheet1 uuid; v_sheet2 uuid;
+  v_admin uuid; v_fin uuid;
+  n int; ok boolean; v_owner uuid; v_total numeric;
+begin
+  select id into v_ped   from public.departments    where code = 'PED';
+  select id into v_cat   from public.budget_categories where code = 'GEN_THEORY';
+  select id into v_payee from public.payees         where first_name = 'ทดสอบ';
+  select id into v_ay    from public.academic_years where year_be = 2569;
+  select id into v_fy69  from public.fiscal_years   where year_be = 2569;
+  select id into v_fy70  from public.fiscal_years   where year_be = 2570;
+  select id into v_sem   from public.semesters      where academic_year_id = v_ay and code = 'first';
+  select id into v_admin from auth.users where email = 'admin.test@bcn.ac.th';
+  select id into v_fin   from auth.users where email = 'fin.test@bcn.ac.th';
+
+  -- เตรียมใบสำคัญสองฉบับ: ฉบับหนึ่งส่งแล้ว อีกฉบับยังเป็นร่าง
+  insert into public.courses (code, name_th, course_kind, department_id)
+  values ('CS101', 'รายวิชาทดสอบหน้างบฯ', 'theory', v_ped) returning id into v_course;
+  insert into public.course_offerings
+    (course_id, academic_year_id, semester_id, fiscal_year_id, department_id, student_year_level)
+  values (v_course, v_ay, v_sem, v_fy69, v_ped, 2) returning id into v_off;
+  insert into public.course_budget_allocations
+    (course_offering_id, budget_category_id, allocated_amount)
+  values (v_off, v_cat, 50000.00);
+
+  insert into public.payment_vouchers
+    (voucher_kind, course_offering_id, fiscal_year_id, subject_text, created_by)
+  values ('lecturer', v_off, v_fy69, 'CS101 รายวิชาทดสอบหน้างบฯ', v_admin)
+  returning id into v_vch_ok;
+  insert into public.voucher_lines
+    (voucher_id, line_no, payee_id, budget_category_id, expense_item, hours, amount)
+  values (v_vch_ok, 1, v_payee, v_cat, 'theory', 3, 0);
+
+  insert into public.payment_vouchers
+    (voucher_kind, course_offering_id, fiscal_year_id, subject_text, created_by)
+  values ('lecturer', v_off, v_fy69, 'CS101 ฉบับร่าง', v_admin)
+  returning id into v_vch_draft;
+  insert into public.voucher_lines
+    (voucher_id, line_no, payee_id, budget_category_id, expense_item, hours, amount)
+  values (v_vch_draft, 1, v_payee, v_cat, 'theory', 2, 0);
+
+  perform pg_temp.as_user('admin.test@bcn.ac.th');
+  set local role authenticated;
+  update public.voucher_checklists set is_checked = true where voucher_id = v_vch_ok;
+  perform public.set_voucher_status(v_vch_ok, 'submitted');
+  reset role;
+
+  -- ผู้จัดทำหน้างบฯ เป็นเจ้าหน้าที่การเงิน (คนละคนกับผู้จัดทำใบสำคัญ)
+  perform pg_temp.as_user('fin.test@bcn.ac.th');
+  set local role authenticated;
+
+  -- 44. created_by ต้องถูกเติมจากผู้ใช้ที่เข้าสู่ระบบ ไม่ใช่จากหน้าเว็บ ----------
+  insert into public.treasury_cover_sheets
+    (fiscal_year_id, teacher_type, study_level, period_month)
+  values (v_fy69, 'special', 'bachelor', date_trunc('month', current_date)::date)
+  returning id into v_sheet1;
+  reset role;
+  select created_by into v_owner from public.treasury_cover_sheets where id = v_sheet1;
+  perform pg_temp.check('44 ผู้จัดทำหน้างบฯ ถูกบันทึกอัตโนมัติจากผู้ใช้ที่เข้าสู่ระบบ',
+                        v_owner = v_fin);
+
+  perform pg_temp.as_user('fin.test@bcn.ac.th');
+  set local role authenticated;
+  insert into public.treasury_cover_sheets
+    (fiscal_year_id, teacher_type, study_level, period_month)
+  values (v_fy70, 'special', 'bachelor', date_trunc('month', current_date)::date)
+  returning id into v_sheet2;
+
+  -- 45. ใบสำคัญคนละปีงบประมาณ นำขึ้นหน้างบฯ ไม่ได้ ---------------------------
+  begin
+    insert into public.treasury_cover_sheet_items
+      (sheet_id, voucher_id, line_no, teacher_name, subject_text, amount, subtotal)
+    values (v_sheet2, v_vch_ok, 1, 'ทดสอบ ระบบ', 'CS101', 1200, 1200);
+    ok := false;
+  exception when others then ok := (sqlerrm like '%คนละปีงบประมาณ%');
+  end;
+  perform pg_temp.check('45 ใบสำคัญข้ามปีงบประมาณ นำขึ้นหน้างบฯ ไม่ได้', ok);
+
+  -- 46. ยอดที่พิมพ์ไม่ตรงกับใบสำคัญ ถูกปฏิเสธ ---------------------------------
+  begin
+    insert into public.treasury_cover_sheet_items
+      (sheet_id, voucher_id, line_no, teacher_name, subject_text, amount, subtotal)
+    values (v_sheet1, v_vch_ok, 1, 'ทดสอบ ระบบ', 'CS101', 999, 999);
+    ok := false;
+  exception when others then ok := (sqlerrm like '%ไม่ตรงกับยอดในใบสำคัญ%');
+  end;
+  perform pg_temp.check('46 ยอดบนหน้างบฯ ที่ไม่ตรงกับใบสำคัญ ถูกปฏิเสธ', ok);
+
+  -- 47. ใบสำคัญที่ยังเป็นร่าง นำขึ้นหน้างบฯ ไม่ได้ ------------------------------
+  begin
+    insert into public.treasury_cover_sheet_items
+      (sheet_id, voucher_id, line_no, teacher_name, subject_text, amount, subtotal)
+    values (v_sheet1, v_vch_draft, 2, 'ทดสอบ ระบบ', 'CS101', 800, 800);
+    ok := false;
+  exception when others then ok := (sqlerrm like '%ร่าง%');
+  end;
+  perform pg_temp.check('47 ใบสำคัญที่ยังเป็นร่าง นำขึ้นหน้างบฯ ไม่ได้', ok);
+
+  -- 48. ยอดรวมหน้างบฯ คำนวณจากรายการ ไม่ใช่จากที่หน้าเว็บส่งมา -----------------
+  insert into public.treasury_cover_sheet_items
+    (sheet_id, voucher_id, line_no, teacher_name, subject_text, hours, amount, subtotal)
+  values (v_sheet1, v_vch_ok, 1, 'ทดสอบ ระบบ', 'CS101', 3, 1200, 1200);
+  reset role;
+  select total_amount into v_total from public.treasury_cover_sheets where id = v_sheet1;
+  perform pg_temp.check('48 ยอดรวมหน้างบฯ ถูกคำนวณจากรายการเป็น 1,200', v_total = 1200);
+
+  perform pg_temp.as_user('fin.test@bcn.ac.th');
+  set local role authenticated;
+
+  -- 49. ใบสำคัญฉบับเดิม ขึ้นหน้างบฯ ซ้ำไม่ได้ ----------------------------------
+  begin
+    insert into public.treasury_cover_sheet_items
+      (sheet_id, voucher_id, line_no, teacher_name, subject_text, amount, subtotal)
+    values (v_sheet1, v_vch_ok, 2, 'ทดสอบ ระบบ', 'CS101', 1200, 1200);
+    ok := false;
+  exception when others then ok := true;
+  end;
+  perform pg_temp.check('49 ใบสำคัญฉบับเดียว ขึ้นหน้างบฯ ได้ครั้งเดียว', ok);
+
+  -- 50. หน้าเว็บแก้ยอดรวมหน้างบฯ เองไม่ได้ (คุมด้วย GRANT ระดับคอลัมน์) ---------
+  begin
+    update public.treasury_cover_sheets set total_amount = 1 where id = v_sheet1;
+    ok := false;
+  exception when others then ok := true;
+  end;
+  perform pg_temp.check('50 แก้ยอดรวมหน้างบฯ จากหน้าเว็บไม่ได้', ok);
+  reset role;
+end $$;
+
+-- =====================================================================
+-- การทดสอบสิทธิ์ระดับคอลัมน์ของใบสำคัญ (migration 0014)
+-- =====================================================================
+do $$
+declare
+  v_ped uuid; v_cat uuid; v_payee uuid; v_ay uuid; v_sem uuid; v_fy uuid;
+  v_course uuid; v_off uuid; v_vch uuid; v_sec1 uuid; v_admin uuid;
+  ok boolean; v_owner uuid; v_total numeric; v_no text; v_by uuid;
+begin
+  select id into v_ped   from public.departments        where code = 'PED';
+  select id into v_cat   from public.budget_categories  where code = 'GEN_THEORY';
+  select id into v_payee from public.payees             where first_name = 'ทดสอบ';
+  select id into v_ay    from public.academic_years     where year_be = 2569;
+  select id into v_fy    from public.fiscal_years       where year_be = 2569;
+  select id into v_sem   from public.semesters where academic_year_id = v_ay and code = 'first';
+  select id into v_sec1  from auth.users where email = 'sec1.test@bcn.ac.th';
+  select id into v_admin from auth.users where email = 'admin.test@bcn.ac.th';
+
+  insert into public.courses (code, name_th, course_kind, department_id)
+  values ('COL101', 'รายวิชาทดสอบสิทธิ์คอลัมน์', 'theory', v_ped) returning id into v_course;
+  insert into public.course_offerings
+    (course_id, academic_year_id, semester_id, fiscal_year_id, department_id, student_year_level)
+  values (v_course, v_ay, v_sem, v_fy, v_ped, 2) returning id into v_off;
+  insert into public.course_budget_allocations
+    (course_offering_id, budget_category_id, allocated_amount)
+  values (v_off, v_cat, 50000.00);
+
+  -- 51. ผู้จัดทำถูกบันทึกจากผู้ใช้ที่เข้าสู่ระบบ แม้หน้าเว็บจะส่งชื่อคนอื่นมา ----------
+  perform pg_temp.as_user('sec1.test@bcn.ac.th');
+  set local role authenticated;
+  insert into public.payment_vouchers
+    (voucher_kind, course_offering_id, subject_text, created_by)
+  values ('lecturer', v_off, 'COL101 ทดสอบ', v_admin)   -- แอบอ้างว่าแอดมินเป็นผู้จัดทำ
+  returning id into v_vch;
+  insert into public.voucher_lines
+    (voucher_id, line_no, payee_id, budget_category_id, expense_item, hours, amount)
+  values (v_vch, 1, v_payee, v_cat, 'theory', 2, 0);
+  reset role;
+  select created_by into v_owner from public.payment_vouchers where id = v_vch;
+  perform pg_temp.check('51 ผู้จัดทำใบสำคัญถูกบันทึกเป็นผู้ใช้จริง ไม่ใช่ค่าที่หน้าเว็บส่งมา',
+                        v_owner = v_sec1);
+
+  perform pg_temp.as_user('sec1.test@bcn.ac.th');
+  set local role authenticated;
+
+  -- 52. แก้ยอดรวมในใบสำคัญจากหน้าเว็บไม่ได้ ------------------------------------
+  begin
+    update public.payment_vouchers set total_amount = 999999 where id = v_vch;
+    ok := false;
+  exception when others then ok := true;
+  end;
+  perform pg_temp.check('52 แก้ยอดรวมในใบสำคัญจากหน้าเว็บไม่ได้', ok);
+
+  -- 53. ตั้งเลขที่ใบสำคัญเองไม่ได้ ---------------------------------------------
+  begin
+    update public.payment_vouchers set voucher_no = 'ปลอม-0001' where id = v_vch;
+    ok := false;
+  exception when others then ok := true;
+  end;
+  perform pg_temp.check('53 ตั้งเลขที่ใบสำคัญเองไม่ได้', ok);
+
+  -- 54. เปลี่ยนสถานะโดยไม่ผ่าน RPC ไม่ได้ ---------------------------------------
+  begin
+    update public.payment_vouchers set status = 'paid' where id = v_vch;
+    ok := false;
+  exception when others then ok := true;
+  end;
+  perform pg_temp.check('54 เปลี่ยนสถานะเอกสารตรง ๆ ไม่ได้ ต้องผ่าน RPC', ok);
+
+  -- 55. แต่แก้ข้อความบนแบบฟอร์มได้ตามปกติ ---------------------------------------
+  update public.payment_vouchers set subject_text = 'COL101 แก้ไขแล้ว' where id = v_vch;
+  perform pg_temp.check('55 แก้ข้อความบนแบบฟอร์มได้ตามปกติ',
+                        (select subject_text from public.payment_vouchers where id = v_vch)
+                        = 'COL101 แก้ไขแล้ว');
+
+  -- 56. ผู้ติ๊กเช็คลิสต์ถูกบันทึกเป็นผู้ใช้จริง --------------------------------------
+  update public.voucher_checklists set is_checked = true, checked_by = v_admin
+   where voucher_id = v_vch
+     and item_key = (select key from public.checklist_items where is_active order by sort_order limit 1);
+  reset role;
+  select checked_by into v_by from public.voucher_checklists
+   where voucher_id = v_vch and is_checked limit 1;
+  perform pg_temp.check('56 ผู้ติ๊กเช็คลิสต์ถูกบันทึกเป็นผู้ใช้จริง', v_by = v_sec1);
+
+  -- 57. ยอดรวมยังคงเท่ากับผลรวมบรรทัด (2 ชม. × 400) -----------------------------
+  select total_amount into v_total from public.payment_vouchers where id = v_vch;
+  select voucher_no  into v_no    from public.payment_vouchers where id = v_vch;
+  perform pg_temp.check('57 ยอดรวมยังเท่ากับผลรวมบรรทัด และยังไม่มีเลขที่ใบสำคัญ',
+                        v_total = 800 and v_no is null);
+end $$;
+
+-- =====================================================================
+-- การทดสอบสิทธิ์ผู้ดูแลระบบกับเอกสารที่ตรวจสอบแล้ว (migration 0016)
+-- =====================================================================
+do $$
+declare
+  v_ped uuid; v_cat uuid; v_payee uuid; v_ay uuid; v_sem uuid; v_fy uuid;
+  v_course uuid; v_off uuid; v_vch uuid; v_line uuid; n int; ok boolean;
+begin
+  select id into v_ped   from public.departments       where code = 'PED';
+  select id into v_cat   from public.budget_categories where code = 'GEN_THEORY';
+  select id into v_payee from public.payees            where first_name = 'ทดสอบ';
+  select id into v_ay    from public.academic_years    where year_be = 2569;
+  select id into v_fy    from public.fiscal_years      where year_be = 2569;
+  select id into v_sem   from public.semesters where academic_year_id = v_ay and code = 'first';
+
+  insert into public.courses (code, name_th, course_kind, department_id)
+  values ('ADM101', 'รายวิชาทดสอบสิทธิ์แอดมิน', 'theory', v_ped) returning id into v_course;
+  insert into public.course_offerings
+    (course_id, academic_year_id, semester_id, fiscal_year_id, department_id, student_year_level)
+  values (v_course, v_ay, v_sem, v_fy, v_ped, 2) returning id into v_off;
+  insert into public.course_budget_allocations
+    (course_offering_id, budget_category_id, allocated_amount)
+  values (v_off, v_cat, 50000.00);
+
+  -- เลขานุการเป็นผู้จัดทำและส่งเอกสาร
+  perform pg_temp.as_user('sec1.test@bcn.ac.th');
+  set local role authenticated;
+  insert into public.payment_vouchers (voucher_kind, course_offering_id, subject_text)
+  values ('lecturer', v_off, 'ADM101 ทดสอบ') returning id into v_vch;
+  insert into public.voucher_lines
+    (voucher_id, line_no, payee_id, budget_category_id, expense_item, hours, amount)
+  values (v_vch, 1, v_payee, v_cat, 'theory', 2, 0) returning id into v_line;
+  update public.voucher_checklists set is_checked = true where voucher_id = v_vch;
+  perform public.set_voucher_status(v_vch, 'submitted');
+  reset role;
+
+  -- การเงินตรวจสอบ (คนละคนกับผู้จัดทำ)
+  perform pg_temp.as_user('fin.test@bcn.ac.th');
+  set local role authenticated;
+  perform public.set_voucher_status(v_vch, 'verified');
+  reset role;
+
+  -- 58. เลขานุการแก้เอกสารที่ตรวจสอบแล้วไม่ได้ (และต้องไม่ "เงียบ" คือต้องไม่มีแถวถูกแก้)
+  perform pg_temp.as_user('sec1.test@bcn.ac.th');
+  set local role authenticated;
+  begin
+    update public.payment_vouchers set subject_text = 'เลขานุการแก้' where id = v_vch;
+    get diagnostics n = row_count;
+    ok := (n = 0);
+  exception when others then ok := true;
+  end;
+  perform pg_temp.check('58 เลขานุการแก้เอกสารที่ตรวจสอบแล้วไม่ได้', ok);
+  reset role;
+
+  -- 59. ผู้ดูแลระบบแก้เอกสารที่ตรวจสอบแล้วได้จริง (ไม่ใช่ผ่านแบบเงียบ ๆ)
+  perform pg_temp.as_user('admin.test@bcn.ac.th');
+  set local role authenticated;
+  update public.payment_vouchers set subject_text = 'ADM101 ผู้ดูแลระบบแก้' where id = v_vch;
+  get diagnostics n = row_count;
+  perform pg_temp.check('59 ผู้ดูแลระบบแก้เอกสารที่ตรวจสอบแล้วได้', n = 1);
+
+  -- 60. และแก้บรรทัดของเอกสารที่ตรวจสอบแล้วได้
+  update public.voucher_lines set note = 'แก้โดยผู้ดูแลระบบ' where id = v_line;
+  get diagnostics n = row_count;
+  perform pg_temp.check('60 ผู้ดูแลระบบแก้บรรทัดของเอกสารที่ตรวจสอบแล้วได้', n = 1);
+
+  -- 61. แต่เมื่อจ่ายเงินแล้ว แม้ผู้ดูแลระบบก็แก้ไม่ได้ (trigger เป็นผู้บังคับ)
+  reset role;
+  perform pg_temp.as_user('fin.test@bcn.ac.th');
+  set local role authenticated;
+  perform public.set_voucher_status(v_vch, 'paid', current_date, 'KTB');
+  reset role;
+  perform pg_temp.as_user('admin.test@bcn.ac.th');
+  set local role authenticated;
+  begin
+    update public.payment_vouchers set subject_text = 'แก้หลังจ่าย' where id = v_vch;
+    get diagnostics n = row_count;
+    ok := (n = 0);
+  exception when others then ok := true;
+  end;
+  perform pg_temp.check('61 เอกสารที่จ่ายเงินแล้ว แม้ผู้ดูแลระบบก็แก้ไม่ได้', ok);
+  reset role;
+
+  -- 62. เจ้าหน้าที่งานการเงินมีสิทธิ์ทำหน้างบฯ ตรงกับที่ RLS อนุญาต
+  select count(*) into n from public.role_menu_permissions p
+    join public.roles r on r.id = p.role_id
+   where r.code = 'finance' and p.menu_key = 'docs.cover'
+     and p.can_create and p.can_update;
+  perform pg_temp.check('62 สิทธิ์เมนูหน้างบฯ ของงานการเงินตรงกับ RLS', n = 1);
 end $$;
