@@ -138,7 +138,7 @@ export function CoverSheetsPage() {
             key: '__a', header: 'จัดการ', align: 'right',
             render: (r) => (
               <button type="button" onClick={() => nav(`/docs/cover-sheets/${r.id}`)}
-                className="rounded px-2 py-1 text-xs text-brand-700 hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-slate-800">
+                className="btn-link-brand">
                 เปิด
               </button>
             ),

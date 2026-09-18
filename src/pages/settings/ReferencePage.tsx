@@ -73,11 +73,7 @@ export function ReferencePage() {
               role="tab"
               aria-selected={tab === t.key}
               onClick={() => setTab(t.key)}
-              className={`min-h-[40px] whitespace-nowrap rounded-lg px-3 text-sm ${
-                tab === t.key
-                  ? 'bg-brand-600 font-medium text-white'
-                  : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
-              }`}
+              className={tab === t.key ? 'tab-btn-on' : 'tab-btn-off'}
             >
               {t.label}
             </button>

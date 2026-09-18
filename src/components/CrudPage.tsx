@@ -73,13 +73,13 @@ export function CrudPage<T extends { id: string }>({
       <div className="flex justify-end gap-1">
         {canUpdate && (
           <button type="button" onClick={() => setEditing(row)}
-            className="rounded px-2 py-1 text-xs text-brand-700 hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-slate-800">
+            className="btn-link-brand">
             แก้ไข
           </button>
         )}
         {canDelete && (
           <button type="button" onClick={() => setDeleting(row)}
-            className="rounded px-2 py-1 text-xs text-rose-700 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-slate-800">
+            className="btn-link-danger">
             ลบ
           </button>
         )}

@@ -530,11 +530,11 @@ export function VoucherEditorPage() {
                   {editable && (
                     <td className="px-2 py-2 text-right">
                       <button type="button" onClick={() => setEditLine(l)}
-                        className="rounded px-2 py-1 text-xs text-brand-700 hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-slate-800">
+                        className="btn-link-brand">
                         แก้ไข
                       </button>
                       <button type="button" onClick={() => setDeleteLine(l)}
-                        className="rounded px-2 py-1 text-xs text-rose-700 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-slate-800">
+                        className="btn-link-danger">
                         ลบ
                       </button>
                     </td>

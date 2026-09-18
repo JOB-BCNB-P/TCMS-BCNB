@@ -118,7 +118,7 @@ export function AuditPage() {
       key: 'view', header: '', align: 'right',
       render: (r) => (
         <button type="button" onClick={() => setOpen(r)}
-          className="rounded px-2 py-1 text-xs text-brand-700 hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-slate-800">
+          className="btn-link-brand">
           ดูรายละเอียด
         </button>
       ),

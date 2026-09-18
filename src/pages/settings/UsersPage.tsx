@@ -181,7 +181,7 @@ export function UsersPage() {
             key: '__a', header: 'จัดการ', align: 'right' as const,
             render: (r: Row) => (
               <button type="button" onClick={() => setEditing(r)}
-                className="rounded px-2 py-1 text-xs text-brand-700 hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-slate-800">
+                className="btn-link-brand">
                 กำหนดสิทธิ์
               </button>
             ),

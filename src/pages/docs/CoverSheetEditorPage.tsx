@@ -368,7 +368,7 @@ export function CoverSheetEditorPage() {
                   {editable && (
                     <td className="px-2 py-2 text-right">
                       <button type="button" onClick={() => setRemoving(i)}
-                        className="rounded px-2 py-1 text-xs text-rose-700 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-slate-800">
+                        className="btn-link-danger">
                         นำออก
                       </button>
                     </td>

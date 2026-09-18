@@ -141,11 +141,7 @@ export function FinanceStatusPage() {
           {TABS.map((t) => (
             <button key={t.key} type="button" role="tab" aria-selected={tab === t.key}
               onClick={() => { setTab(t.key); setOpenBank(null) }}
-              className={`min-h-[40px] whitespace-nowrap rounded-lg px-3 text-sm ${
-                tab === t.key
-                  ? 'bg-brand-600 font-medium text-white'
-                  : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
-              }`}>
+              className={tab === t.key ? 'tab-btn-on' : 'tab-btn-off'}>
               {t.label}
             </button>
           ))}
@@ -196,24 +192,24 @@ export function FinanceStatusPage() {
               return (
                 <div className="flex flex-wrap justify-end gap-1">
                   <button type="button" onClick={() => nav(`/docs/vouchers/${r.id}`)}
-                    className="rounded px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">
+                    className="btn-link-muted">
                     เปิด
                   </button>
                   <button type="button" onClick={() => setOpenBank(openBank === r.id ? null : r.id)}
-                    className="rounded px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">
+                    className="btn-link-muted">
                     เลขบัญชี
                   </button>
                   {canAct && tab === 'submitted' && (
                     <button type="button" disabled={isMaker || changeStatus.isPending}
                       title={isMaker ? 'คุณเป็นผู้จัดทำเอกสารฉบับนี้ ตรวจสอบเองไม่ได้' : undefined}
                       onClick={() => changeStatus.mutate({ id: r.id, status: 'verified' })}
-                      className="rounded px-2 py-1 text-xs text-brand-700 hover:bg-brand-50 disabled:opacity-40 dark:text-brand-300 dark:hover:bg-slate-800">
+                      className="btn-link-brand disabled:opacity-40">
                       ตรวจสอบแล้ว
                     </button>
                   )}
                   {canAct && tab === 'verified' && (
                     <button type="button" onClick={() => setPaying(r)}
-                      className="rounded px-2 py-1 text-xs text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-slate-800">
+                      className="btn-link text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-slate-800">
                       บันทึกการจ่าย
                     </button>
                   )}

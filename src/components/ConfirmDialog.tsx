@@ -31,10 +31,10 @@ export function ConfirmDialog({
 
   return (
     <div
-      className="no-print fixed inset-0 z-[55] flex items-center justify-center bg-slate-900/50 p-4"
+      className="anim-overlay no-print fixed inset-0 z-[55] flex items-center justify-center bg-slate-900/50 p-4"
       onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onCancel() }}
     >
-      <div role="alertdialog" aria-modal="true" aria-labelledby="cf-title" className="card w-full max-w-sm p-6">
+      <div role="alertdialog" aria-modal="true" aria-labelledby="cf-title" className="anim-dialog card w-full max-w-sm p-6">
         <h2 id="cf-title" className="text-base font-semibold text-slate-900 dark:text-white">{title}</h2>
         <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-slate-600 dark:text-slate-300">
           {message}

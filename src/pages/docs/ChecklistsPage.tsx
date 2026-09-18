@@ -212,11 +212,11 @@ export function ChecklistsPage() {
                 </div>
                 <div className="flex gap-1">
                   <button type="button" onClick={() => setEditing(it)}
-                    className="rounded px-2 py-1 text-xs text-brand-700 hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-slate-800">
+                    className="btn-link-brand">
                     แก้ไข
                   </button>
                   <button type="button" onClick={() => setDeleting(it)}
-                    className="rounded px-2 py-1 text-xs text-rose-700 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-slate-800">
+                    className="btn-link-danger">
                     ลบ
                   </button>
                 </div>

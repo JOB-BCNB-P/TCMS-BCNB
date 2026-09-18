@@ -46,7 +46,7 @@ export function LogoutDialog({ open, onCancel, onConfirm }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
+      className="anim-overlay fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onCancel()
       }}
@@ -57,7 +57,7 @@ export function LogoutDialog({ open, onCancel, onConfirm }: Props) {
         aria-modal="true"
         aria-labelledby="logout-title"
         aria-describedby="logout-desc"
-        className="card w-full max-w-sm p-6"
+        className="anim-dialog card w-full max-w-sm p-6"
       >
         <h2 id="logout-title" className="text-lg font-semibold text-slate-900 dark:text-white">
           ท่านต้องการออกจากระบบหรือไม่?

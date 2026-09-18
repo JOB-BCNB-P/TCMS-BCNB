@@ -37,28 +37,191 @@
   /* ปุ่มสูงอย่างน้อย 44px เพื่อให้กดง่ายบนโทรศัพท์ */
   .btn {
     @apply inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg px-4 text-sm font-medium;
-    @apply transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+    @apply disabled:cursor-not-allowed disabled:opacity-50;
+    /* ระบุ property ที่เปลี่ยนเป็นรายชื่อ ไม่ใช้ transition: all
+       เพราะ all จะลากคุณสมบัติที่เบราว์เซอร์ต้องคำนวณเลย์เอาต์ใหม่ (width, height)
+       เข้ามาด้วย ซึ่งเป็นสาเหตุหลักของอาการกระตุก */
+    transition-property: background-color, border-color, color, box-shadow, transform, opacity;
+    transition-duration: var(--motion-fast);
+    transition-timing-function: var(--motion-ease);
+  }
+  /* กดแล้วยุบลงเล็กน้อย ให้รู้สึกว่าปุ่มตอบสนอง — transform ไม่กระทบเลย์เอาต์ */
+  .btn:active:not(:disabled) {
+    transform: scale(0.97);
   }
   .btn-primary {
     @apply btn bg-brand-600 text-white hover:bg-brand-700 active:bg-brand-800;
+    @apply hover:shadow-md;
   }
   .btn-secondary {
     @apply btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50;
     @apply dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800;
   }
   .btn-danger {
-    @apply btn bg-rose-600 text-white hover:bg-rose-700;
+    @apply btn bg-rose-600 text-white hover:bg-rose-700 hover:shadow-md;
   }
+
+  /**
+   * ปุ่มข้อความในตารางและในการ์ด (แก้ไข / ลบ / เปิด / เลขบัญชี)
+   *
+   * ก่อนหน้านี้ปุ่มกลุ่มนี้เขียน utility class ซ้ำกัน 17 จุดและไม่มี transition เลย
+   * สีจึงกระโดดทันทีเมื่อเอาเมาส์ไปวาง รวมไว้เป็นคลาสเดียวเพื่อให้แก้ที่เดียวได้
+   */
+  .btn-link {
+    @apply inline-flex min-h-[32px] items-center rounded px-2 py-1 text-xs;
+    transition-property: background-color, color, transform, opacity;
+    transition-duration: var(--motion-fast);
+    transition-timing-function: var(--motion-ease);
+  }
+  .btn-link:active:not(:disabled) {
+    transform: scale(0.95);
+  }
+  .btn-link-brand {
+    @apply btn-link text-brand-700 hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-slate-800;
+  }
+  .btn-link-danger {
+    @apply btn-link text-rose-700 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-slate-800;
+  }
+  .btn-link-muted {
+    @apply btn-link text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800;
+  }
+
+  /* ปุ่มแท็บ (หน้าข้อมูลอ้างอิง หน้างานการเงิน) */
+  .tab-btn {
+    @apply min-h-[40px] whitespace-nowrap rounded-lg px-3 text-sm;
+    transition-property: background-color, color, font-weight, box-shadow;
+    transition-duration: var(--motion-fast);
+    transition-timing-function: var(--motion-ease);
+  }
+  .tab-btn-off {
+    @apply tab-btn text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800;
+  }
+  .tab-btn-on {
+    @apply tab-btn bg-brand-600 font-medium text-white shadow-sm;
+  }
+
   .field-label {
     @apply mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300;
   }
   .field-input {
     @apply min-h-[44px] w-full rounded-lg border border-slate-300 bg-white px-3 text-sm;
     @apply focus:border-brand-500 dark:border-slate-700 dark:bg-slate-900;
+    transition-property: border-color, box-shadow, background-color;
+    transition-duration: var(--motion-fast);
+    transition-timing-function: var(--motion-ease);
   }
   .table-head {
     @apply bg-brand-50 text-xs font-semibold uppercase tracking-wide text-brand-900;
     @apply dark:bg-slate-800 dark:text-slate-200;
+  }
+}
+
+/* ---------------------------------------------------------------------
+ * ชั้นการเคลื่อนไหวของทั้งระบบ
+ *
+ * ใช้ CSS Transitions กับสิ่งที่ผู้ใช้เป็นคนสั่ง (วางเมาส์ กดปุ่ม เปิด/ปิดเมนู)
+ * และ CSS Animations กับสิ่งที่ปรากฏขึ้นมาเอง (ป๊อปอัพ ข้อความแจ้งผล)
+ * ทั้งสองอย่างเคลื่อนแค่ opacity กับ transform ซึ่งเบราว์เซอร์ส่งให้ GPU ทำได้
+ * จึงลื่นที่ 60 เฟรมต่อวินาที ต่างจากการเคลื่อน width/height/top ที่ทำให้กระตุก
+ * --------------------------------------------------------------------- */
+:root {
+  --motion-fast: 140ms;
+  --motion-normal: 200ms;
+  --motion-slow: 260ms;
+  /* ออกเร็ว-จบนุ่ม (ease-out) เหมาะกับของที่ปรากฏขึ้น ไม่หน่วงให้รู้สึกช้า */
+  --motion-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+@keyframes tcms-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes tcms-scale-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)   scale(1); }
+}
+
+/* ป๊อปอัพบนมือถือเลื่อนขึ้นจากขอบล่าง ตามที่ผู้ใช้คาดหวังจากแอปบนโทรศัพท์ */
+@keyframes tcms-slide-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes tcms-slide-in-right {
+  from { opacity: 0; transform: translateX(16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.anim-overlay {
+  animation: tcms-fade-in var(--motion-normal) var(--motion-ease) both;
+}
+.anim-dialog {
+  animation: tcms-slide-up var(--motion-normal) var(--motion-ease) both;
+}
+.anim-toast {
+  animation: tcms-slide-in-right var(--motion-normal) var(--motion-ease) both;
+}
+.anim-pop {
+  animation: tcms-scale-in var(--motion-fast) var(--motion-ease) both;
+}
+
+@media (min-width: 640px) {
+  /* บนจอใหญ่ ป๊อปอัพอยู่กลางจอ การเลื่อนขึ้นจึงเปลี่ยนเป็นขยายเข้ามาแทน */
+  .anim-dialog {
+    animation-name: tcms-scale-in;
+  }
+}
+
+/**
+ * เมนูย่อยแบบ drop-down
+ *
+ * ใช้ grid-template-rows: 0fr → 1fr เพื่อให้ความสูงไหลตามเนื้อหาจริง
+ * ไม่ต้องเดา max-height และไม่ต้องวัดความสูงด้วย JavaScript
+ * (เบราว์เซอร์ที่ยังไม่รองรับจะกระโดดทันทีแทนการค่อย ๆ เปิด ซึ่งยังใช้งานได้ปกติ)
+ */
+.submenu {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--motion-normal) var(--motion-ease),
+              opacity var(--motion-fast) var(--motion-ease);
+  opacity: 0;
+}
+.submenu > * {
+  overflow: hidden;
+  min-height: 0;
+}
+.submenu[data-open='true'] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+/* ลูกศรของเมนูหลัก หมุน 90 องศาเมื่อกางเมนูย่อย */
+.chevron {
+  transition: transform var(--motion-normal) var(--motion-ease);
+}
+.chevron[data-open='true'] {
+  transform: rotate(90deg);
+}
+
+/**
+ * เคารพการตั้งค่าของผู้ใช้ที่ขอลดการเคลื่อนไหว
+ *
+ * ผู้ใช้บางคนเวียนหัวหรือคลื่นไส้จากภาพเคลื่อนไหว (vestibular disorder)
+ * และตั้งค่าไว้ที่ระบบปฏิบัติการ เว็บที่ไม่เคารพค่านี้ทำให้เขาใช้งานไม่ได้จริง
+ * ตัดการเคลื่อนไหวทิ้ง แต่ยังคงสถานะปลายทางไว้ครบ ปุ่มและเมนูจึงยังทำงานเหมือนเดิม
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .btn:active:not(:disabled),
+  .btn-link:active:not(:disabled) {
+    transform: none;
   }
 }
 
@@ -70,6 +233,16 @@
 @media print {
   .no-print {
     display: none !important;
+  }
+  /* ถ้าแอนิเมชันยังไม่จบตอนสั่งพิมพ์ กระดาษจะได้หน้าที่ opacity ยังไม่ถึง 1
+     บังคับสถานะปลายทางไว้ เอกสารราชการต้องออกมาครบทุกครั้ง */
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    opacity: 1 !important;
+    transform: none !important;
   }
   body {
     background: #fff !important;

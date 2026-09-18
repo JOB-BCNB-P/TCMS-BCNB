@@ -92,7 +92,7 @@ export function FormModal({
 
   return (
     <div
-      className="no-print fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 p-0 sm:items-center sm:p-4"
+      className="anim-overlay no-print fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 p-0 sm:items-center sm:p-4"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget && !saving) onCancel()
       }}
@@ -102,7 +102,7 @@ export function FormModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="form-title"
-        className="card max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-b-none sm:rounded-xl"
+        className="anim-dialog card max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-b-none sm:rounded-xl"
       >
         <header className="sticky top-0 z-10 border-b border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
           <h2 id="form-title" className="text-base font-semibold text-slate-900 dark:text-white">

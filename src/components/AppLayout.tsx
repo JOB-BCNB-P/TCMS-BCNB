@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthProvider'
-import { usePermissions } from '@/hooks/usePermissions'
+import { usePermissions, type MenuNode } from '@/hooks/usePermissions'
 import { useTheme } from '@/hooks/useTheme'
 import { LogoutDialog } from './LogoutDialog'
 import { useIdleLogout } from '@/hooks/useIdleLogout'
@@ -16,6 +16,27 @@ export function AppLayout() {
   const [logoutOpen, setLogoutOpen] = useState(false)
   const location = useLocation()
   const toast = useToast()
+
+  /**
+   * กลุ่มเมนูที่กางอยู่
+   *
+   * เก็บเป็นรายชื่อ ไม่ใช่ "กางได้ทีละกลุ่ม" เพราะงานจริงต้องสลับไปมา
+   * ระหว่างข้อมูลหลักกับการสร้างเอกสารบ่อย การบังคับปิดกลุ่มอื่นทำให้ต้องกดซ้ำ
+   */
+  const [manualGroups, setManualGroups] = useState<string[] | null>(null)
+
+  // กลุ่มที่มีหน้าปัจจุบันอยู่ ต้องกางไว้เสมอ แม้ผู้ใช้จะยังไม่เคยกดเลย
+  const activeGroup = visibleMenu.find(
+    (n) => n.children?.some((c) => location.pathname.startsWith(c.path)),
+  )?.key
+
+  const openGroups = manualGroups ?? (activeGroup ? [activeGroup] : [])
+
+  const toggleGroup = (key: string) =>
+    setManualGroups((prev) => {
+      const base = prev ?? (activeGroup ? [activeGroup] : [])
+      return base.includes(key) ? base.filter((k) => k !== key) : [...base, key]
+    })
 
   // ออกจากระบบอัตโนมัติเมื่อไม่ได้ใช้งาน — ทดแทน Inactivity timeout ที่เป็น Pro-only
   const onIdleTimeout = useCallback(() => {
@@ -76,7 +97,7 @@ export function AppLayout() {
       <div className="flex">
         {sidebarOpen && (
           <div
-            className="fixed inset-0 z-20 bg-slate-900/40 lg:hidden"
+            className="anim-overlay fixed inset-0 z-20 bg-slate-900/40 lg:hidden"
             onClick={() => setSidebarOpen(false)}
             aria-hidden="true"
           />
@@ -87,7 +108,8 @@ export function AppLayout() {
           aria-label="เมนูหลัก"
           className={[
             'no-print fixed inset-y-0 left-0 z-30 w-72 overflow-y-auto border-r border-slate-200 bg-white pt-16',
-            'transition-transform dark:border-slate-800 dark:bg-slate-900',
+            'dark:border-slate-800 dark:bg-slate-900',
+            'transition-transform duration-200 ease-[cubic-bezier(0.22,0.61,0.36,1)]',
             'lg:sticky lg:top-16 lg:z-0 lg:h-[calc(100dvh-4rem)] lg:translate-x-0 lg:pt-0',
             sidebarOpen ? 'translate-x-0' : '-translate-x-full',
           ].join(' ')}
@@ -104,19 +126,13 @@ export function AppLayout() {
           <ul className="space-y-1 p-3">
             {visibleMenu.map((node) => (
               <li key={node.key}>
-                {node.children ? (
-                  <>
-                    <p className="px-3 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                      {node.label}
-                    </p>
-                    <ul className="space-y-1">
-                      {node.children.map((child) => (
-                        <li key={child.key}>
-                          <MenuLink to={child.path} label={child.label} onNavigate={() => setSidebarOpen(false)} />
-                        </li>
-                      ))}
-                    </ul>
-                  </>
+                {node.children && node.children.length > 0 ? (
+                  <MenuGroup
+                    node={node}
+                    open={openGroups.includes(node.key)}
+                    onToggle={() => toggleGroup(node.key)}
+                    onNavigate={() => setSidebarOpen(false)}
+                  />
                 ) : (
                   <MenuLink to={node.path} label={node.label} onNavigate={() => setSidebarOpen(false)} />
                 )}
@@ -138,9 +154,9 @@ export function AppLayout() {
           role="alertdialog"
           aria-modal="true"
           aria-labelledby="idle-title"
-          className="no-print fixed inset-0 z-[58] flex items-center justify-center bg-slate-900/50 p-4"
+          className="anim-overlay no-print fixed inset-0 z-[58] flex items-center justify-center bg-slate-900/50 p-4"
         >
-          <div className="card w-full max-w-sm p-6">
+          <div className="anim-dialog card w-full max-w-sm p-6">
             <h2 id="idle-title" className="text-base font-semibold text-slate-900 dark:text-white">
               กำลังจะออกจากระบบอัตโนมัติ
             </h2>
@@ -177,12 +193,85 @@ export function AppLayout() {
   )
 }
 
-function MenuLink({ to, label, onNavigate }: { to: string; label: string; onNavigate: () => void }) {
+/**
+ * เมนูหลักที่กางเมนูย่อยลงมา
+ *
+ * กลุ่มที่มีหน้าที่กำลังเปิดอยู่จะถูกกางไว้เสมอ ผู้ใช้จึงเห็นว่าตัวเองอยู่ที่ไหน
+ * แม้จะเพิ่งรีเฟรชหน้าหรือเข้ามาจากลิงก์ตรง
+ */
+function MenuGroup({
+  node, open, onToggle, onNavigate,
+}: {
+  node: MenuNode
+  open: boolean
+  onToggle: () => void
+  onNavigate: () => void
+}) {
+  const panelId = `submenu-${node.key}`
+  return (
+    <>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-controls={panelId}
+        className={[
+          'flex min-h-[44px] w-full items-center justify-between gap-2 rounded-lg px-3 text-left text-sm font-medium',
+          'text-slate-700 hover:bg-brand-50 dark:text-slate-300 dark:hover:bg-slate-800',
+          'transition-colors duration-150',
+        ].join(' ')}
+      >
+        <span className="min-w-0 truncate">{node.label}</span>
+        <ChevronIcon open={open} />
+      </button>
+
+      {/* ต้องเรนเดอร์ไว้เสมอ ไม่ถอดออกจาก DOM มิฉะนั้นจะไม่มีอะไรให้ค่อย ๆ เปิด
+          ตอนยังไม่กางจึงซ่อนจากโปรแกรมอ่านหน้าจอ และถอดออกจากลำดับการกด Tab
+          (ไม่ใช้ attribute inert เพราะยังไม่มีใน type ของ React เวอร์ชันนี้) */}
+      <div id={panelId} className="submenu" data-open={open} aria-hidden={!open}>
+        <div>
+          <ul className="space-y-1 pl-3 pt-1">
+            {node.children?.map((child) => (
+              <li key={child.key}>
+                <MenuLink
+                  to={child.path}
+                  label={child.label}
+                  onNavigate={onNavigate}
+                  focusable={open}
+                />
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </>
+  )
+}
+
+function ChevronIcon({ open }: { open: boolean }) {
+  return (
+    <svg
+      className="chevron shrink-0 text-slate-400"
+      data-open={open}
+      width="16" height="16" viewBox="0 0 24 24"
+      fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"
+    >
+      <path d="M9 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function MenuLink({
+  to, label, onNavigate, focusable = true,
+}: {
+  to: string; label: string; onNavigate: () => void; focusable?: boolean
+}) {
   return (
     <NavLink
       to={to}
       end={to === '/'}
       onClick={onNavigate}
+      tabIndex={focusable ? undefined : -1}
       className={({ isActive }) =>
         [
           'flex min-h-[44px] items-center rounded-lg px-3 text-sm transition-colors',

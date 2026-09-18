@@ -112,11 +112,11 @@ export function CsvImport({
 
   return (
     <div
-      className="no-print fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 sm:items-center sm:p-4"
+      className="anim-overlay no-print fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 sm:items-center sm:p-4"
       onMouseDown={(e) => { if (e.target === e.currentTarget && !importing) onCancel() }}
     >
       <div role="dialog" aria-modal="true" aria-labelledby="csv-title"
-        className="card max-h-[92dvh] w-full max-w-3xl overflow-y-auto rounded-b-none sm:rounded-xl">
+        className="anim-dialog card max-h-[92dvh] w-full max-w-3xl overflow-y-auto rounded-b-none sm:rounded-xl">
         <header className="sticky top-0 border-b border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
           <h2 id="csv-title" className="text-base font-semibold text-slate-900 dark:text-white">
             นำเข้า{title}จากไฟล์ CSV

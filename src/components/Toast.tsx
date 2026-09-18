@@ -67,7 +67,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             <div
               key={t.id}
               role={t.kind === 'error' ? 'alert' : 'status'}
-              className={`pointer-events-auto w-full max-w-md rounded-xl border p-3 text-sm shadow-card ${s.cls}`}
+              className={`anim-toast pointer-events-auto w-full max-w-md rounded-xl border p-3 text-sm shadow-card ${s.cls}`}
             >
               <div className="flex items-start gap-2">
                 <span aria-hidden="true" className="mt-0.5">{s.icon}</span>
@@ -78,7 +78,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 <button
                   type="button"
                   onClick={() => setItems((v) => v.filter((x) => x.id !== t.id))}
-                  className="shrink-0 rounded px-1 text-lg leading-none opacity-60 hover:opacity-100"
+                  className="shrink-0 rounded px-1 text-lg leading-none opacity-60 transition-opacity duration-150 hover:opacity-100"
                   aria-label="ปิดข้อความ"
                 >
                   ×
