@@ -78,7 +78,11 @@ export function OfferingsPage() {
   }))
   const semOptions = (lookups.data?.semesters ?? []).map((s) => {
     const ay = (lookups.data?.academicYears ?? []).find((a) => a.id === s.academic_year_id)
-    return { value: s.id as string, label: `${s.name_th} / ${ay ? `พ.ศ. ${ay.year_be}` : ''}` }
+    const lvl = (s as { student_year_level?: number | null }).student_year_level
+    return {
+      value: s.id as string,
+      label: `${s.name_th} / ${ay ? `พ.ศ. ${ay.year_be}` : ''}${lvl ? ` · ชั้นปี ${lvl}` : ' · ทุกชั้นปี'}`,
+    }
   })
   const courseOpts = (courses.data ?? [])
     .filter((c) => c.is_active)
@@ -169,7 +173,7 @@ export function OfferingsPage() {
         { name: 'academic_year_id', label: 'ปีการศึกษา', type: 'select', required: true, options: ayOptions },
         {
           name: 'semester_id', label: 'ภาคการศึกษา', type: 'select', required: true, options: semOptions,
-          help: 'ต้องเป็นภาคของปีการศึกษาที่เลือกไว้ มิฉะนั้นระบบจะปฏิเสธ',
+          help: 'ต้องเป็นภาคของปีการศึกษาที่เลือกไว้ และถ้าภาคนั้นระบุชั้นปี ต้องตรงกับชั้นปีที่สอนด้วย',
         },
         {
           name: 'fiscal_year_id', label: 'ปีงบประมาณ', type: 'select', required: true, options: fyOptions,

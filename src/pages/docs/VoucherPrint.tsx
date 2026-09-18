@@ -1,9 +1,11 @@
 import { formatBaht, bahtText, fullName } from '@/lib/format'
-import { formatDateBE } from '@/lib/thaiDate'
+import { formatDateBE, formatMonthBE } from '@/lib/thaiDate'
 import { EXPENSE_ITEM_LABEL } from '@/lib/types'
 
 export interface PrintLine {
   line_no: number
+  teaching_month: string | null
+  student_year_level: number | null
   payee: { prefix: string | null; first_name: string; last_name: string; position_title: string | null } | null
   site: { name_th: string; ward: string | null } | null
   budget_category_name: string
@@ -19,7 +21,6 @@ export interface PrintLine {
 export interface PrintVoucher {
   voucher_no: string | null
   org_name: string
-  form_code: string
   faculty_text: string | null
   semester_text: string | null
   year_be: number | null
@@ -41,6 +42,20 @@ export interface PrintVoucher {
 }
 
 const MIN_ROWS = 8
+
+/**
+ * ช่อง (12) หมายเหตุ
+ *
+ * แบบฟอร์มไม่มีคอลัมน์สำหรับประจำเดือน ชั้นปี หรือวัน-เวลาที่สอน
+ * ข้อมูลเหล่านี้จึงรวมมาลงช่องหมายเหตุตามที่วิทยาลัยใช้จริง
+ */
+function noteText(l: PrintLine): string {
+  const parts: string[] = []
+  if (l.teaching_month) parts.push(`ประจำเดือน ${formatMonthBE(l.teaching_month)}`)
+  if (l.student_year_level) parts.push(`ชั้นปี ${l.student_year_level}`)
+  if (l.note) parts.push(l.note)
+  return parts.join(' · ')
+}
 
 function Fill({ value, w = '8rem' }: { value?: string | number | null; w?: string }) {
   return (
@@ -81,7 +96,6 @@ export function VoucherPrint({ v, lines }: { v: PrintVoucher; lines: PrintLine[]
 
   return (
     <div className="print-doc print-page" style={{ fontFamily: 'Sarabun, sans-serif', color: '#000' }}>
-      <div style={{ textAlign: 'right', fontSize: 11 }}>{v.form_code}</div>
       <h1 style={{ textAlign: 'center', fontSize: 15, fontWeight: 700, margin: '2px 0' }}>
         หลักฐานการเบิกจ่ายเงินค่าสอนพิเศษและค่าสอนเกินภาระงานสอนในสถาบันอุดมศึกษา
       </h1>
@@ -102,17 +116,17 @@ export function VoucherPrint({ v, lines }: { v: PrintVoucher; lines: PrintLine[]
         <thead>
           <tr>
             <th rowSpan={2} style={{ width: '4%' }}>ลำดับที่</th>
-            <th rowSpan={2} style={{ width: '17%' }}>ชื่อ – นามสกุล</th>
-            <th rowSpan={2} style={{ width: '14%' }}>ตำแหน่งผู้ทำการสอน</th>
+            <th rowSpan={2} style={{ width: '15%' }}>ชื่อ – นามสกุล</th>
+            <th rowSpan={2} style={{ width: '12%' }}>ตำแหน่งผู้ทำการสอน</th>
             <th rowSpan={2} style={{ width: '7%' }}>ผู้ได้รับเชิญให้สอน</th>
             <th colSpan={2} style={{ width: '12%' }}>ระดับการสอน</th>
             <th rowSpan={2} style={{ width: '9%' }}>
               จำนวนหน่วยชั่วโมงที่ทำการสอนพิเศษและสอนเกินภาระงานสอน
             </th>
             <th rowSpan={2} style={{ width: '10%' }}>จำนวนเงิน</th>
-            <th rowSpan={2} style={{ width: '13%' }}>ลายมือชื่อผู้รับเงิน</th>
+            <th rowSpan={2} style={{ width: '11%' }}>ลายมือชื่อผู้รับเงิน</th>
             <th rowSpan={2} style={{ width: '8%' }}>วัน เดือน ปี ที่รับเงิน</th>
-            <th rowSpan={2} style={{ width: '6%' }}>หมายเหตุ</th>
+            <th rowSpan={2} style={{ width: '14%' }}>หมายเหตุ</th>
           </tr>
           <tr>
             <th style={{ width: '6%' }}>ปริญญาตรี</th>
@@ -132,7 +146,7 @@ export function VoucherPrint({ v, lines }: { v: PrintVoucher; lines: PrintLine[]
               <td style={{ textAlign: 'right' }}>{formatBaht(l.amount)}</td>
               <td>&nbsp;</td>
               <td style={{ textAlign: 'center' }}>{l.receipt_date ? formatDateBE(l.receipt_date) : ''}</td>
-              <td>{l.note ?? ''}</td>
+              <td>{noteText(l)}</td>
             </tr>
           ))}
           {Array.from({ length: blanks }, (_, i) => (

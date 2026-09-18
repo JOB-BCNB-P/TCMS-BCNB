@@ -984,3 +984,59 @@ begin
      and p.can_create and p.can_update;
   perform pg_temp.check('62 สิทธิ์เมนูหน้างบฯ ของงานการเงินตรงกับ RLS', n = 1);
 end $$;
+
+
+-- =====================================================================
+-- การทดสอบภาคการศึกษาแยกตามชั้นปี (migration 0017)
+-- =====================================================================
+do $$
+declare v_ay uuid; v_s1 uuid; v_s4 uuid; v_ped uuid; v_c uuid; v_fy uuid;
+        ok boolean; n int;
+begin
+  select id into v_ay  from public.academic_years where year_be = 2569;
+  select id into v_fy  from public.fiscal_years   where year_be = 2569;
+  select id into v_ped from public.departments    where code = 'PED';
+
+  insert into public.semesters (academic_year_id, code, name_th, start_date, end_date, student_year_level)
+  values (v_ay, 'first', 'ภาคการศึกษาที่ 1 (ชั้นปี 1)', '2026-06-15', '2026-10-20', 1)
+  returning id into v_s1;
+  insert into public.semesters (academic_year_id, code, name_th, start_date, end_date, student_year_level)
+  values (v_ay, 'first', 'ภาคการศึกษาที่ 1 (ชั้นปี 4)', '2026-05-01', '2026-09-10', 4)
+  returning id into v_s4;
+  perform pg_temp.check('63 ภาคเดียวกันของปีเดียวกัน มีได้หลายชั้นปี', true);
+
+  -- 64. แต่ชั้นปีเดียวกันซ้ำไม่ได้ ---------------------------------------------
+  begin
+    insert into public.semesters (academic_year_id, code, name_th, start_date, end_date, student_year_level)
+    values (v_ay, 'first', 'ซ้ำ', '2026-06-15', '2026-10-20', 1);
+    ok := false;
+  exception when others then ok := true;
+  end;
+  perform pg_temp.check('64 ภาคเดียวกันของชั้นปีเดียวกัน ซ้ำไม่ได้', ok);
+
+  insert into public.courses (code, name_th, course_kind, department_id)
+  values ('YR101', 'รายวิชาทดสอบชั้นปี', 'theory', v_ped) returning id into v_c;
+
+  -- 65. เลือกภาคของชั้นปีอื่นมาใส่ให้รายวิชาไม่ได้ -------------------------------
+  begin
+    insert into public.course_offerings
+      (course_id, academic_year_id, semester_id, fiscal_year_id, department_id, student_year_level)
+    values (v_c, v_ay, v_s4, v_fy, v_ped, 1);
+    ok := false;
+  exception when others then ok := (sqlerrm like '%ชั้นปี%');
+  end;
+  perform pg_temp.check('65 เลือกภาคของชั้นปี 4 ให้รายวิชาชั้นปี 1 ไม่ได้', ok);
+
+  -- 66. ชั้นปีตรงกันบันทึกได้ --------------------------------------------------
+  insert into public.course_offerings
+    (course_id, academic_year_id, semester_id, fiscal_year_id, department_id, student_year_level)
+  values (v_c, v_ay, v_s1, v_fy, v_ped, 1);
+  get diagnostics n = row_count;
+  perform pg_temp.check('66 เลือกภาคที่ตรงกับชั้นปีได้', n = 1);
+
+  -- 67. ผู้ลงนามในแบบฟอร์ม -----------------------------------------------------
+  select count(*) into n from public.app_settings where key = 'org.deputy_academic';
+  perform pg_temp.check('67 มีค่าผู้รับรอง (รองผู้อำนวยการด้านวิชาการ)', n = 1);
+  select count(*) into n from public.app_settings where key = 'form.voucher_code';
+  perform pg_temp.check('68 รหัสแบบฟอร์มถูกเอาออกจากระบบแล้ว', n = 0);
+end $$;

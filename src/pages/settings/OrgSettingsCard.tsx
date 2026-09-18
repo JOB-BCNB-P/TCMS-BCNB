@@ -13,22 +13,26 @@ interface Draft {
   directorPrefix: string
   directorName: string
   directorPosition: string
-  voucherCode: string
+  deputyPrefix: string
+  deputyName: string
+  deputyPosition: string
 }
 
 const EMPTY: Draft = {
   orgName: '', program: '',
   directorPrefix: '', directorName: '', directorPosition: '',
-  voucherCode: '',
+  deputyPrefix: '', deputyName: '', deputyPosition: '',
 }
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '')
 
 /**
- * ค่าคงที่ที่ถูกพิมพ์ลงเอกสารทุกใบ
+ * ผู้ลงนามและข้อความที่ถูกพิมพ์ลงเอกสารทุกใบ
  *
- * ชื่อผู้อำนวยการอยู่ในช่องผู้อนุมัติของแบบ FM2.2-03 การเก็บไว้ที่นี่
- * ทำให้เปลี่ยนผู้บริหารได้โดยไม่ต้องแก้โค้ดและไม่ต้องแก้เอกสารเก่าย้อนหลัง
+ * ช่อง (16) ผู้รับรอง = รองผู้อำนวยการด้านวิชาการ
+ * ช่อง (17) ผู้อนุมัติ = ผู้อำนวยการ
+ * เก็บไว้ที่นี่เพื่อให้เปลี่ยนผู้บริหารได้โดยไม่ต้องแก้โค้ด
+ * และไม่กระทบเอกสารเก่าที่บันทึกชื่อไว้ในตัวเอกสารแล้ว
  */
 export function OrgSettingsCard() {
   const qc = useQueryClient()
@@ -46,13 +50,16 @@ export function OrgSettingsCard() {
   useEffect(() => {
     if (!q.data || dirty) return
     const dir = settingObject(q.data, 'org.director')
+    const dep = settingObject(q.data, 'org.deputy_academic')
     setDraft({
       orgName: settingText(q.data, 'org.name'),
       program: settingText(q.data, 'org.program'),
       directorPrefix: str(dir.prefix),
       directorName: str(dir.name),
       directorPosition: str(dir.position),
-      voucherCode: settingText(q.data, 'form.voucher_code'),
+      deputyPrefix: str(dep.prefix),
+      deputyName: str(dep.name),
+      deputyPosition: str(dep.position) || 'รองผู้อำนวยการด้านวิชาการ',
     })
     // dirty เป็นค่าที่อ่านเพื่อ "ข้าม" การเติม ไม่ได้ใช้เป็นตัวกระตุ้น
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -73,7 +80,15 @@ export function OrgSettingsCard() {
           },
           name_th: 'ผู้อนุมัติ (ผู้อำนวยการ)',
         },
-        { key: 'form.voucher_code', value: d.voucherCode.trim(), name_th: 'รหัสแบบฟอร์มใบหลักฐานการเบิกจ่าย' },
+        {
+          key: 'org.deputy_academic',
+          value: {
+            prefix: d.deputyPrefix.trim(),
+            name: d.deputyName.trim(),
+            position: d.deputyPosition.trim(),
+          },
+          name_th: 'ผู้รับรอง (รองผู้อำนวยการด้านวิชาการ)',
+        },
       ].map((r) => ({ ...r, updated_at: now, updated_by: user?.id ?? null }))
 
       const { error } = await supabase.from('app_settings').upsert(rows, { onConflict: 'key' })
@@ -105,10 +120,10 @@ export function OrgSettingsCard() {
 
   return (
     <div className="card p-4 sm:p-5">
-      <h2 className="text-base font-semibold text-slate-900 dark:text-white">ค่าคงที่องค์กร</h2>
+      <h2 className="text-base font-semibold text-slate-900 dark:text-white">ตั้งค่าแบบฟอร์ม</h2>
       <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-        ข้อความเหล่านี้ถูกพิมพ์ลงใบหลักฐานการเบิกจ่ายและหน้างบใบสำคัญฯ ทุกฉบับ
-        เอกสารที่จ่ายเงินแล้วจะยังคงข้อความเดิมที่บันทึกไว้ในตัวเอกสาร
+        ชื่อผู้ลงนามที่นี่จะขึ้นเป็นตัวเลือกในช่องผู้รับรองและผู้อนุมัติของทุกเอกสาร
+        เอกสารที่จ่ายเงินแล้วจะยังคงชื่อเดิมที่บันทึกไว้ในตัวเอกสาร ไม่เปลี่ยนตามที่แก้ที่นี่
       </p>
 
       {q.error && (
@@ -119,11 +134,25 @@ export function OrgSettingsCard() {
 
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         {field('ชื่อส่วนราชการ', 'orgName', undefined, true)}
-        {field('ชื่อหลักสูตร', 'program')}
-        {field('รหัสแบบฟอร์ม', 'voucherCode', 'เช่น FM2.2-03 — ปรากฏมุมบนของใบหลักฐาน')}
-        {field('คำนำหน้าผู้อำนวยการ', 'directorPrefix', 'เช่น ดร. / ผศ.ดร.')}
-        {field('ชื่อ-สกุลผู้อำนวยการ', 'directorName')}
-        {field('ตำแหน่ง', 'directorPosition', 'ข้อความใต้ลายเซ็นในช่องผู้อนุมัติ', true)}
+        {field('ชื่อหลักสูตร', 'program', undefined, true)}
+      </div>
+
+      <h3 className="mt-6 text-sm font-semibold text-slate-800 dark:text-slate-200">
+        ผู้อนุมัติ — ช่อง (17) ของใบหลักฐาน และช่องอนุมัติของหน้างบฯ
+      </h3>
+      <div className="mt-2 grid gap-4 sm:grid-cols-2">
+        {field('คำนำหน้า', 'directorPrefix', 'เช่น ผู้ช่วยศาสตราจารย์ / ดร.')}
+        {field('ชื่อ-สกุล', 'directorName')}
+        {field('ตำแหน่ง', 'directorPosition', 'ข้อความใต้ลายเซ็น', true)}
+      </div>
+
+      <h3 className="mt-6 text-sm font-semibold text-slate-800 dark:text-slate-200">
+        ผู้รับรอง — ช่อง (16) ของใบหลักฐาน
+      </h3>
+      <div className="mt-2 grid gap-4 sm:grid-cols-2">
+        {field('คำนำหน้า', 'deputyPrefix')}
+        {field('ชื่อ-สกุล', 'deputyName')}
+        {field('ตำแหน่ง', 'deputyPosition', 'ข้อความใต้ลายเซ็น', true)}
       </div>
 
       {canEdit && (

@@ -38,6 +38,7 @@ export function PermissionsPage() {
   const canEdit = can('settings.perms', 'update')
   const [draft, setDraft] = useState<Map<string, Perm>>(new Map())
   const [dirty, setDirty] = useState(false)
+  const [previewRole, setPreviewRole] = useState('')
 
   const q = useQuery({
     queryKey: ['permission-matrix'],
@@ -181,6 +182,77 @@ export function PermissionsPage() {
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* ---------- ดูตัวอย่างเมนูของบทบาทอื่น ---------- */}
+      <div className="card p-4">
+        <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+          ดูตัวอย่างเมนูของแต่ละบทบาท
+        </h2>
+        <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+          แสดงว่าบทบาทที่เลือกจะเห็นเมนูอะไรและกดปุ่มอะไรได้บ้าง โดยไม่ต้องเข้าสู่ระบบด้วยบัญชีนั้น
+          — <strong>เป็นการดูหน้าตาเมนูเท่านั้น ไม่ใช่การทดสอบสิทธิ์จริง</strong>
+          เพราะสิทธิ์เข้าถึงข้อมูลบังคับที่ฐานข้อมูลตามบัญชีที่ล็อกอินอยู่จริง
+        </p>
+
+        <div className="mt-3 max-w-sm">
+          <label htmlFor="prev-role" className="field-label">บทบาท</label>
+          <select id="prev-role" className="field-input" value={previewRole}
+            onChange={(e) => setPreviewRole(e.target.value)}>
+            <option value="">— เลือกบทบาท —</option>
+            {roles.map((r) => (
+              <option key={r.id} value={r.id}>{ROLE_LABEL[r.code] ?? r.name_th}</option>
+            ))}
+          </select>
+        </div>
+
+        {previewRole && (
+          <div className="anim-pop mt-4 rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+            {(() => {
+              const visible = orderedMenus.filter((m) => get(previewRole, m.key, 'can_view'))
+              const roots = visible.filter((m) => !m.parent_key)
+              if (visible.length === 0) {
+                return <p className="text-sm text-slate-500">บทบาทนี้ยังไม่เห็นเมนูใดเลย</p>
+              }
+              return (
+                <ul className="space-y-2 text-sm">
+                  {roots.map((root) => {
+                    const kids = visible.filter((m) => m.parent_key === root.key)
+                    return (
+                      <li key={root.key}>
+                        <span className="font-medium text-slate-800 dark:text-slate-100">
+                          {root.name_th}
+                        </span>
+                        {kids.length > 0 && (
+                          <ul className="mt-1 space-y-1 pl-4">
+                            {kids.map((k) => (
+                              <li key={k.key} className="flex flex-wrap items-center gap-2">
+                                <span className="text-slate-700 dark:text-slate-300">{k.name_th}</span>
+                                <span className="text-xs text-slate-500">
+                                  {ACTIONS.filter((a) => get(previewRole, k.key, a.key))
+                                    .map((a) => a.label).join(' · ') || 'ดูอย่างเดียว'}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </li>
+                    )
+                  })}
+                  {/* เมนูที่ไม่มีลูก เช่น หน้าหลัก */}
+                  {visible
+                    .filter((m) => !m.parent_key && !visible.some((x) => x.parent_key === m.key))
+                    .length === 0 && null}
+                </ul>
+              )
+            })()}
+            {dirty && (
+              <p className="mt-3 text-xs text-amber-700 dark:text-amber-400">
+                กำลังแสดงตามที่ติ๊กไว้บนหน้าจอ ซึ่งยังไม่ได้บันทึก
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       {canEdit && (

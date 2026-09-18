@@ -113,7 +113,7 @@ export function useLookups() {
       const [dept, ay, sem, fy, bc, banks, offerings] = await Promise.all([
         supabase.from('departments').select('id, code, name_th').order('sort_order'),
         supabase.from('academic_years').select('id, year_be').order('year_be', { ascending: false }),
-        supabase.from('semesters').select('id, academic_year_id, code, name_th'),
+        supabase.from('semesters').select('id, academic_year_id, code, name_th, student_year_level'),
         supabase.from('fiscal_years').select('id, year_be, is_closed').order('year_be', { ascending: false }),
         supabase.from('budget_categories').select('id, code, name_th, fund_source, expense_item').order('sort_order'),
         supabase.from('banks').select('code, name_th').order('name_th'),

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/auth/AuthProvider'
@@ -30,6 +31,7 @@ interface Row {
 const SCOPED_ROLES: RoleCode[] = ['secretary', 'instructor']
 
 export function UsersPage() {
+  const nav = useNavigate()
   const qc = useQueryClient()
   const toast = useToast()
   const { user } = useAuth()
@@ -111,6 +113,30 @@ export function UsersPage() {
           ผู้ที่เข้าสู่ระบบด้วยอีเมล @bcn.ac.th ครั้งแรกจะถูกสร้างบัญชีไว้ในสถานะ “รออนุมัติ”
           และยังไม่เห็นข้อมูลใดเลยจนกว่าจะถูกเปิดใช้งานที่หน้านี้
         </p>
+      </div>
+
+      {/**
+        * อธิบายให้ชัดว่าทำไมไม่มีปุ่ม "เพิ่มผู้ใช้"
+        * ไม่ใช่ฟีเจอร์ที่ลืมทำ แต่เป็นข้อจำกัดที่ตั้งใจ เพื่อไม่ต้องเอา service_role key
+        * ไปไว้ในหน้าเว็บ ซึ่งถ้าหลุดเท่ากับเปิดฐานข้อมูลทั้งระบบรวมเลขบัญชีธนาคาร
+        */}
+      <div className="card p-4">
+        <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+          การเพิ่มผู้ใช้ใหม่ทำอย่างไร
+        </h2>
+        <ol className="mt-2 space-y-1 text-sm text-slate-600 dark:text-slate-300">
+          <li>1. ให้เจ้าตัวเปิดเว็บแล้วกด “เข้าสู่ระบบด้วย Google” ด้วยอีเมล @bcn.ac.th ของตนเอง</li>
+          <li>2. ชื่อจะโผล่ในตารางด้านล่างทันทีในสถานะ “รออนุมัติ” และยังไม่เห็นข้อมูลใดเลย</li>
+          <li>3. กด “กำหนดสิทธิ์” เลือกบทบาทและสาขาที่ให้เห็น แล้วติ๊กเปิดใช้งาน</li>
+        </ol>
+        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+          ระบบไม่มีปุ่มสร้างบัญชีจากหน้านี้โดยเจตนา — การสร้างบัญชีจากหน้าเว็บต้องใช้กุญแจระดับผู้ดูแล
+          ซึ่งถ้าฝังไว้ในหน้าเว็บแล้วหลุด จะเปิดฐานข้อมูลทั้งระบบรวมถึงเลขบัญชีธนาคาร
+        </p>
+        <button type="button" className="btn-secondary mt-3 !min-h-[40px] !px-3"
+          onClick={() => nav('/settings/permissions')}>
+          ดูตัวอย่างเมนูของแต่ละบทบาท
+        </button>
       </div>
 
       {pending > 0 && (

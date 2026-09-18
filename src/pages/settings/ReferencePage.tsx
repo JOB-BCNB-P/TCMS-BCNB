@@ -8,6 +8,7 @@ interface AcademicYear { id: string; year_be: number; is_active: boolean }
 interface Semester {
   id: string; academic_year_id: string; code: 'first' | 'second' | 'summer'
   name_th: string; start_date: string; end_date: string
+  student_year_level: number | null
   academic_years: { year_be: number } | null
 }
 interface FiscalYear {
@@ -28,7 +29,7 @@ const TABS = [
   { key: 'sem', label: 'ภาคการศึกษา' },
   { key: 'fy', label: 'ปีงบประมาณ' },
   { key: 'dept', label: 'สาขาวิชา' },
-  { key: 'org', label: 'ค่าคงที่องค์กร' },
+  { key: 'org', label: 'แบบฟอร์ม' },
 ] as const
 
 type TabKey = (typeof TABS)[number]['key']
@@ -111,10 +112,10 @@ export function ReferencePage() {
       {tab === 'sem' && (
         <CrudPage<Semester>
           title="ภาคการศึกษา"
-          description="แต่ละปีการศึกษามีได้ภาคละหนึ่งรายการ — วันเริ่ม/สิ้นสุดใช้ตรวจว่าวันที่สอนในใบเบิกอยู่ในภาคจริง"
+          description="แต่ละชั้นปีเปิด-ปิดภาคไม่พร้อมกันได้ — เพิ่มภาคเดียวกันหลายรายการโดยระบุชั้นปีต่างกัน"
           menuKey="settings.ref"
           table="semesters"
-          select="id, academic_year_id, code, name_th, start_date, end_date, academic_years(year_be)"
+          select="id, academic_year_id, code, name_th, start_date, end_date, student_year_level, academic_years(year_be)"
           orderBy="start_date"
           ascending={false}
           label="ภาคการศึกษา"
@@ -127,6 +128,8 @@ export function ReferencePage() {
                   <span className="font-medium">{r.name_th}</span>
                   <span className="block text-xs text-slate-500">
                     ปีการศึกษา {r.academic_years ? `พ.ศ. ${r.academic_years.year_be}` : '-'}
+                    {' · '}
+                    {r.student_year_level ? `เฉพาะชั้นปี ${r.student_year_level}` : 'ทุกชั้นปี'}
                   </span>
                 </div>
               ),
@@ -145,6 +148,15 @@ export function ReferencePage() {
               name: 'code', label: 'ภาค', type: 'select', required: true,
               options: (Object.keys(SEM_LABEL) as Semester['code'][]).map((c) => ({ value: c, label: SEM_LABEL[c] })),
             },
+            {
+              name: 'student_year_level', label: 'ใช้กับชั้นปี', type: 'select',
+              required: true,
+              options: [
+                { value: 'all', label: 'ทุกชั้นปี' },
+                ...[1, 2, 3, 4].map((n) => ({ value: String(n), label: `เฉพาะชั้นปี ${n}` })),
+              ],
+              help: 'เลือกชั้นปีเมื่อชั้นปีนั้นเปิด-ปิดภาคไม่ตรงกับชั้นปีอื่น — รายวิชาที่เปิดสอนจะเลือกได้เฉพาะภาคที่ตรงกับชั้นปีของตน',
+            },
             { name: 'name_th', label: 'ชื่อที่ใช้แสดง', type: 'text', help: 'เว้นว่างได้ ระบบจะตั้งให้ตามภาคที่เลือก' },
             {
               name: 'start_date', label: 'วันเริ่มภาค', type: 'date', required: true,
@@ -162,14 +174,23 @@ export function ReferencePage() {
             name_th: r?.name_th ?? '',
             start_date: r?.start_date ?? '',
             end_date: r?.end_date ?? '',
+            student_year_level: r?.student_year_level == null ? 'all' : String(r.student_year_level),
           })}
-          fromForm={(v) => ({
-            ...v,
-            name_th: String(v.name_th ?? '').trim() || SEM_LABEL[v.code as Semester['code']],
-          })}
+          fromForm={(v) => {
+            const raw = String(v.student_year_level ?? 'all')
+            const lvl = raw === 'all' ? '' : raw
+            const base = String(v.name_th ?? '').trim() || SEM_LABEL[v.code as Semester['code']]
+            return {
+              ...v,
+              // ใส่ชั้นปีต่อท้ายชื่อให้เอง ไม่งั้นรายการจะดูเหมือนกันหมดในช่องเลือก
+              name_th: lvl && !base.includes('ชั้นปี') ? `${base} (ชั้นปี ${lvl})` : base,
+              student_year_level: lvl === '' ? null : Number(lvl),
+            }
+          }}
           exportColumns={[
             { key: 'ay', header: 'ปีการศึกษา', value: (r) => r.academic_years?.year_be ?? '' },
             { key: 'n', header: 'ภาคการศึกษา', value: (r) => r.name_th },
+            { key: 'lv', header: 'ชั้นปี', value: (r) => r.student_year_level ?? 'ทุกชั้นปี' },
             { key: 's', header: 'วันเริ่ม', value: (r) => formatDateBE(r.start_date) },
             { key: 'e', header: 'วันสิ้นสุด', value: (r) => formatDateBE(r.end_date) },
           ]}

@@ -158,6 +158,41 @@ export function VoucherEditorPage() {
 
   const settings = useAppSettings()
 
+  /**
+   * รายวิชาทั้งหมดที่บันทึกไว้ ใช้เป็นตัวเลือกช่อง "วิชา"
+   *
+   * ไม่จำกัดเฉพาะรายวิชาของ offering นี้ เพราะใบหลักฐานบางใบครอบมากกว่าหนึ่งวิชา
+   * แต่ข้อความที่เลือกถูกเก็บเป็น snapshot ในเอกสาร ไม่ผูกกับตารางรายวิชาต่อไป
+   */
+  const coursesQ = useQuery({
+    queryKey: ['courses-for-voucher'],
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase.from('courses')
+        .select('id, code, name_th, is_active').order('code')
+      if (error) throw error
+      return (data ?? []) as { id: string; code: string; name_th: string; is_active: boolean }[]
+    },
+  })
+
+  const courseOptions = (coursesQ.data ?? [])
+    .filter((c) => c.is_active)
+    .map((c) => ({ value: `${c.code} ${c.name_th}`, label: `${c.code} ${c.name_th}` }))
+
+  const director = settingObject(settings.data, 'org.director')
+  const deputy = settingObject(settings.data, 'org.deputy_academic')
+
+  /** ชื่อเต็มของผู้ลงนามที่ตั้งไว้ในหน้า ตั้งค่าระบบ → แบบฟอร์ม */
+  const signerName = (o: Record<string, string>) =>
+    [o.prefix, o.name].filter(Boolean).join('').trim()
+
+  const signerOptions = [
+    ...(signerName(director) ? [{ value: signerName(director), label: `${signerName(director)} — ${director.position ?? 'ผู้อำนวยการ'}` }] : []),
+    ...(signerName(deputy) ? [{ value: signerName(deputy), label: `${signerName(deputy)} — ${deputy.position ?? 'รองผู้อำนวยการด้านวิชาการ'}` }] : []),
+  ]
+  const noSigners = signerOptions.length === 0
+
+
   const v = vq.data
   const lines = lq.data ?? []
   const isAdmin = user?.role_code === 'admin'
@@ -318,7 +353,11 @@ export function VoucherEditorPage() {
     { name: 'faculty_text', label: 'คณะ', type: 'text', wide: true },
     { name: 'semester_text', label: 'ภาคการศึกษา (ข้อความบนแบบฟอร์ม)', type: 'text' },
     { name: 'year_be', label: 'พ.ศ.', type: 'number' },
-    { name: 'subject_text', label: 'วิชา', type: 'text', wide: true },
+    {
+      name: 'subject_text', label: 'วิชา', type: 'select', required: true,
+      options: courseOptions, wide: true,
+      help: 'เลือกจากรายวิชาที่บันทึกไว้ — ข้อความที่เลือกจะถูกเก็บติดเอกสาร ไม่เปลี่ยนตามการแก้ชื่อวิชาภายหลัง',
+    },
     { name: 'doc_date', label: 'วันที่เอกสาร', type: 'date', required: true },
     {
       name: 'teaching_level', label: 'ระดับการสอน (ค่าตั้งต้นของรายการ)', type: 'select',
@@ -328,25 +367,33 @@ export function VoucherEditorPage() {
       name: 'preparer_coordinator_id', label: '(14) ผู้จัดทำ', type: 'select', options: coordOptions, wide: true,
       help: 'ผู้ประสานงานรายวิชาที่ผูกไว้กับรายวิชาที่เปิดสอน',
     },
-    { name: 'preparer_position', label: 'ตำแหน่งผู้จัดทำ', type: 'text' },
     { name: 'preparer_date', label: 'วันที่ (ผู้จัดทำ)', type: 'date' },
     { name: 'payer_name', label: '(15) ผู้จ่ายเงิน', type: 'text' },
     { name: 'payer_position', label: 'ตำแหน่งผู้จ่ายเงิน', type: 'text' },
     { name: 'payer_date', label: 'วันที่ (ผู้จ่ายเงิน)', type: 'date' },
-    { name: 'certifier_name', label: '(16) ผู้รับรอง', type: 'text' },
-    { name: 'certifier_position', label: 'ตำแหน่งผู้รับรอง', type: 'text' },
+    {
+      name: 'certifier_name', label: '(16) ผู้รับรอง', type: 'select',
+      options: signerOptions, wide: true,
+      help: noSigners
+        ? 'ยังไม่ได้ตั้งชื่อผู้ลงนาม — ไปกรอกที่ ตั้งค่าระบบ → แบบฟอร์ม'
+        : 'ตามที่ตกลงไว้คือรองผู้อำนวยการด้านวิชาการ — ตำแหน่งจะถูกเติมให้อัตโนมัติ',
+    },
     { name: 'certifier_date', label: 'วันที่ (ผู้รับรอง)', type: 'date' },
-    { name: 'approver_name', label: '(17) ผู้อนุมัติ', type: 'text' },
-    { name: 'approver_position', label: 'ตำแหน่งผู้อนุมัติ', type: 'text' },
+    {
+      name: 'approver_name', label: '(17) ผู้อนุมัติ', type: 'select',
+      options: signerOptions, wide: true,
+      help: noSigners ? undefined : 'ตามระเบียบคือผู้อำนวยการ',
+    },
     { name: 'approver_date', label: 'วันที่ (ผู้อนุมัติ)', type: 'date' },
     { name: 'note', label: 'หมายเหตุภายใน (ไม่พิมพ์ลงแบบฟอร์ม)', type: 'textarea' },
   ]
 
-  const director = settingObject(settings.data, 'org.director')
   const preparer = (oq.data?.coordinators ?? []).find((c) => c.id === v?.preparer_coordinator_id)
 
   const printLines: PrintLine[] = lines.map((l) => ({
     line_no: l.line_no,
+    teaching_month: l.teaching_month,
+    student_year_level: l.student_year_level,
     payee: l.payees,
     site: l.clinical_sites,
     budget_category_name: l.budget_categories?.name_th ?? '',
@@ -589,7 +636,6 @@ export function VoucherEditorPage() {
           v={{
             voucher_no: v.voucher_no,
             org_name: settingText(settings.data, 'org.name'),
-            form_code: settingText(settings.data, 'form.voucher_code') || 'FM2.2-03',
             faculty_text: v.faculty_text,
             semester_text: v.semester_text,
             year_be: v.year_be,
@@ -600,8 +646,10 @@ export function VoucherEditorPage() {
             preparer_position: v.preparer_position ?? preparer?.position_title ?? null,
             preparer_date: v.preparer_date,
             payer_name: v.payer_name, payer_position: v.payer_position, payer_date: v.payer_date,
-            certifier_name: v.certifier_name, certifier_position: v.certifier_position, certifier_date: v.certifier_date,
-            approver_name: v.approver_name ?? ([director.prefix, director.name].filter(Boolean).join('') || null),
+            certifier_name: v.certifier_name ?? (signerName(deputy) || null),
+            certifier_position: v.certifier_position ?? deputy.position ?? null,
+            certifier_date: v.certifier_date,
+            approver_name: v.approver_name ?? (signerName(director) || null),
             approver_position: v.approver_position ?? director.position ?? null,
             approver_date: v.approver_date,
           }}
@@ -633,6 +681,17 @@ export function VoucherEditorPage() {
         onSubmit={(values) => {
           const clean: Record<string, unknown> = {}
           for (const [k, val] of Object.entries(values)) clean[k] = val === '' ? null : val
+          // ตำแหน่งผูกกับชื่อที่เลือก ไม่ให้พิมพ์เองเพื่อไม่ให้ชื่อกับตำแหน่งหลุดจากกัน
+          const posOf = (name: unknown) =>
+            name === signerName(director) ? (director.position ?? null)
+            : name === signerName(deputy) ? (deputy.position ?? null)
+            : null
+          clean.certifier_position = posOf(values.certifier_name)
+          clean.approver_position = posOf(values.approver_name)
+          // ตำแหน่งผู้จัดทำมาจากข้อมูลผู้ประสานงานรายวิชา ไม่ต้องพิมพ์ซ้ำ
+          const coord = (oq.data?.coordinators ?? [])
+            .find((c) => c.id === values.preparer_coordinator_id)
+          if (coord) clean.preparer_position = coord.position_title ?? null
           saveHeader.mutate(clean)
         }}
       />

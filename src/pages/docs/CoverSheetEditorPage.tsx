@@ -93,6 +93,7 @@ export function CoverSheetEditorPage() {
   const [editHeader, setEditHeader] = useState(false)
   const [adding, setAdding] = useState(false)
   const [removing, setRemoving] = useState<Item | null>(null)
+  const [editingItem, setEditingItem] = useState<Item | null>(null)
 
   const sq = useQuery({
     queryKey: ['cover-sheet', id],
@@ -191,6 +192,23 @@ export function CoverSheetEditorPage() {
     onError: (e) => toast.error(toThaiError(e)),
   })
 
+  const saveItem = useMutation({
+    mutationFn: async (values: Record<string, unknown>) => {
+      if (!editingItem) return
+      // จำนวนเงินแก้ไม่ได้ ฐานข้อมูลบังคับให้ตรงกับยอดในใบสำคัญอยู่แล้ว
+      const { data, error } = await supabase.from('treasury_cover_sheet_items').update({
+        teacher_name: values.teacher_name,
+        subject_text: values.subject_text,
+        hours: values.hours === '' ? null : values.hours,
+        note: values.note === '' ? null : values.note,
+      }).eq('id', editingItem.id).select('id')
+      if (error) throw error
+      assertAffected(data)
+    },
+    onSuccess: () => { toast.success('แก้ไขรายการเรียบร้อย'); setEditingItem(null); invalidate() },
+    onError: (e) => toast.error(toThaiError(e)),
+  })
+
   const setStatus = useMutation({
     mutationFn: async (next: VoucherStatus) => {
       const { data, error } = await supabase.from('treasury_cover_sheets')
@@ -203,6 +221,30 @@ export function CoverSheetEditorPage() {
   })
 
   const director = settingObject(settings.data, 'org.director')
+  const deputy = settingObject(settings.data, 'org.deputy_academic')
+
+  /** ชื่อเต็มของผู้ลงนามที่ตั้งไว้ในหน้า ตั้งค่าระบบ → แบบฟอร์ม */
+  const signerName = (o: Record<string, string>) =>
+    [o.prefix, o.name].filter(Boolean).join('').trim()
+
+  const signerOptions = [
+    ...(signerName(director) ? [{ value: signerName(director), label: `${signerName(director)} — ${director.position ?? 'ผู้อำนวยการ'}` }] : []),
+    ...(signerName(deputy) ? [{ value: signerName(deputy), label: `${signerName(deputy)} — ${deputy.position ?? 'รองผู้อำนวยการด้านวิชาการ'}` }] : []),
+  ]
+
+  const coursesQ = useQuery({
+    queryKey: ['courses-for-voucher'],
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase.from('courses')
+        .select('id, code, name_th, is_active').order('code')
+      if (error) throw error
+      return (data ?? []) as { id: string; code: string; name_th: string; is_active: boolean }[]
+    },
+  })
+  const courseOptions = (coursesQ.data ?? [])
+    .filter((c) => c.is_active)
+    .map((c) => ({ value: `${c.code} ${c.name_th}`, label: `${c.code} ${c.name_th}` }))
 
   const headerFields: FieldSpec[] = [
     { name: 'sheet_no', label: 'ประกอบฎีกาที่', type: 'text' },
@@ -223,11 +265,17 @@ export function CoverSheetEditorPage() {
       ],
     },
     { name: 'period_month', label: 'ประจำเดือน', type: 'date', required: true },
-    { name: 'requester_name', label: 'ผู้เบิก', type: 'text' },
-    { name: 'requester_position', label: 'ตำแหน่งผู้เบิก', type: 'text' },
+    {
+      name: 'requester_name', label: 'ผู้เบิก', type: 'select', options: signerOptions, wide: true,
+      help: signerOptions.length === 0
+        ? 'ยังไม่ได้ตั้งชื่อผู้ลงนาม — ไปกรอกที่ ตั้งค่าระบบ → แบบฟอร์ม'
+        : undefined,
+    },
     { name: 'request_date', label: 'วันที่ (ผู้เบิก)', type: 'date' },
-    { name: 'approver_name', label: 'ผู้อนุมัติ', type: 'text' },
-    { name: 'approver_position', label: 'ตำแหน่งผู้อนุมัติ', type: 'text' },
+    {
+      name: 'approver_name', label: 'ผู้อนุมัติ', type: 'select', options: signerOptions, wide: true,
+      help: 'ตามระเบียบคือผู้อำนวยการ',
+    },
     { name: 'approve_date', label: 'วันที่ (ผู้อนุมัติ)', type: 'date' },
     { name: 'note', label: 'หมายเหตุภายใน', type: 'textarea' },
   ]
@@ -367,6 +415,10 @@ export function CoverSheetEditorPage() {
                   <td className="px-2 py-2 text-right font-medium">{formatBaht(i.subtotal)}</td>
                   {editable && (
                     <td className="px-2 py-2 text-right">
+                      <button type="button" onClick={() => setEditingItem(i)}
+                        className="btn-link-brand">
+                        แก้ไข
+                      </button>
                       <button type="button" onClick={() => setRemoving(i)}
                         className="btn-link-danger">
                         นำออก
@@ -406,7 +458,7 @@ export function CoverSheetEditorPage() {
             requester_name: s.requester_name,
             requester_position: s.requester_position,
             request_date: s.request_date,
-            approver_name: s.approver_name ?? ([director.prefix, director.name].filter(Boolean).join('') || null),
+            approver_name: s.approver_name ?? (signerName(director) || null),
             approver_position: s.approver_position ?? director.position ?? null,
             approve_date: s.approve_date,
           }}
@@ -425,10 +477,9 @@ export function CoverSheetEditorPage() {
           student_year_level: s.student_year_level ?? null,
           teacher_type: s.teacher_type, study_level: s.study_level,
           period_month: s.period_month,
-          requester_name: s.requester_name ?? '', requester_position: s.requester_position ?? '',
+          requester_name: s.requester_name ?? '',
           request_date: s.request_date ?? '',
-          approver_name: s.approver_name ?? ([director.prefix, director.name].filter(Boolean).join('') || ''),
-          approver_position: s.approver_position ?? director.position ?? '',
+          approver_name: s.approver_name ?? signerName(director),
           approve_date: s.approve_date ?? '',
           note: s.note ?? '',
         }}
@@ -436,6 +487,13 @@ export function CoverSheetEditorPage() {
           const clean: Record<string, unknown> = {}
           for (const [k, val] of Object.entries(values)) clean[k] = val === '' ? null : val
           clean.period_month = `${String(values.period_month).slice(0, 7)}-01`
+          // ตำแหน่งผูกกับชื่อที่เลือก ไม่ให้ชื่อกับตำแหน่งหลุดจากกัน
+          const posOf = (name: unknown) =>
+            name === signerName(director) ? (director.position ?? null)
+            : name === signerName(deputy) ? (deputy.position ?? null)
+            : null
+          clean.requester_position = posOf(values.requester_name)
+          clean.approver_position = posOf(values.approver_name)
           saveHeader.mutate(clean)
         }}
       />
@@ -454,6 +512,33 @@ export function CoverSheetEditorPage() {
         }]}
         initial={{ voucher_id: '' }}
         onSubmit={(v) => addItem.mutate(String(v.voucher_id))}
+      />
+
+      <FormModal
+        open={!!editingItem}
+        title={`แก้ไขรายการที่ ${editingItem?.line_no ?? ''}`}
+        saving={saveItem.isPending}
+        onCancel={() => setEditingItem(null)}
+        fields={[
+          {
+            name: 'teacher_name', label: 'ชื่อผู้สอน', type: 'text', required: true, wide: true,
+            help: 'ระบบคัดลอกมาจากใบสำคัญให้ตอนเพิ่ม แก้เป็นข้อความที่ต้องการให้ขึ้นบนฎีกาได้',
+          },
+          {
+            name: 'subject_text', label: 'วิชา', type: 'select', required: true,
+            options: courseOptions, wide: true,
+            help: 'เลือกจากรายวิชาที่บันทึกไว้',
+          },
+          { name: 'hours', label: 'หน่วยชั่วโมง', type: 'number' },
+          { name: 'note', label: 'หมายเหตุ', type: 'text' },
+        ]}
+        initial={{
+          teacher_name: editingItem?.teacher_name ?? '',
+          subject_text: editingItem?.subject_text ?? '',
+          hours: editingItem?.hours ?? null,
+          note: editingItem?.note ?? '',
+        }}
+        onSubmit={(vals) => saveItem.mutate(vals)}
       />
 
       <ConfirmDialog
