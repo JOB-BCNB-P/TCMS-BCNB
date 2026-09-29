@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { Spinner } from './Spinner'
 
 export interface FieldOption {
   value: string
@@ -219,6 +220,7 @@ export function FormModal({
               ยกเลิก
             </button>
             <button type="submit" disabled={saving} className="btn-primary sm:min-w-[130px]">
+              {saving && <Spinner />}
               {saving ? 'กำลังบันทึก…' : 'บันทึก'}
             </button>
           </div>

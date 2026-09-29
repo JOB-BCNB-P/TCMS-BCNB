@@ -166,6 +166,8 @@ export function FinanceStatusPage() {
         rows={list.data ?? []}
         rowKey={(r) => r.id}
         loading={list.isLoading}
+        refreshing={list.isFetching}
+        rowClassName={(r) => (changeStatus.isPending && paying?.id === r.id ? 'row-busy' : undefined)}
         emptyText="ไม่มีเอกสารในสถานะนี้"
         columns={[
           {

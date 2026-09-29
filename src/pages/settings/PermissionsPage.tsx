@@ -5,6 +5,7 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { useToast } from '@/components/Toast'
 import { toThaiError } from '@/lib/errors'
 import { ROLE_LABEL, type RoleCode } from '@/lib/types'
+import { Spinner } from '@/components/Spinner'
 
 interface Role { id: string; code: RoleCode; name_th: string }
 interface Menu { key: string; parent_key: string | null; name_th: string; sort_order: number }
@@ -27,9 +28,14 @@ const cellKey = (roleId: string, menuKey: string) => `${roleId}|${menuKey}`
 /**
  * ตารางสิทธิ์เมนู
  *
- * ย้ำให้ผู้ใช้เห็นชัดว่าตารางนี้ควบคุม "การแสดงเมนู" เท่านั้น
- * การติ๊กเพิ่มที่นี่ไม่ได้เปิดสิทธิ์จริงในฐานข้อมูล และการติ๊กออกก็ไม่ได้ปิดช่องทาง REST
- * ถ้าผู้ใช้ติ๊กให้บทบาทหนึ่งเห็นเมนูที่ RLS ไม่อนุญาต หน้าจอจะขึ้นข้อความปฏิเสธจากฐานข้อมูลแทน
+ * ตั้งแต่ migration 0018 ตารางนี้ถูกบังคับที่ฐานข้อมูลด้วย RESTRICTIVE policy
+ * ซึ่ง PostgreSQL นำมา AND ทับ policy เดิม ผลคือ:
+ *
+ *   ติ๊กออก  -> ปิดจริง ทั้งหน้าเว็บและการยิง REST ตรง
+ *   ติ๊กเพิ่ม -> ไม่ได้สิทธิ์เกินกว่าที่บทบาทนั้นมีอยู่แล้ว
+ *
+ * ครึ่งหลังตั้งใจให้ไม่ทำงาน เพราะช่องติ๊กไม่มีข้อมูลว่า "สาขาไหน"
+ * ถ้าปล่อยให้เปิดสิทธิ์ได้ การกั้นข้ามสาขาและการแบ่งแยกหน้าที่จะพังทันที
  */
 export function PermissionsPage() {
   const qc = useQueryClient()
@@ -111,7 +117,7 @@ export function PermissionsPage() {
       if (error) throw error
     },
     onSuccess: () => {
-      toast.success('บันทึกสิทธิ์เมนูเรียบร้อย — ผู้ใช้จะเห็นผลเมื่อเข้าสู่ระบบครั้งถัดไปหรือรีเฟรชหน้า')
+      toast.success('บันทึกเรียบร้อย — มีผลที่ฐานข้อมูลทันที ส่วนเมนูบนหน้าจอของผู้ใช้จะเปลี่ยนเมื่อรีเฟรชหน้า')
       void qc.invalidateQueries({ queryKey: ['permission-matrix'] })
       setDirty(false)
     },
@@ -125,9 +131,30 @@ export function PermissionsPage() {
           สิทธิ์การเข้าถึงของแต่ละบทบาท
         </h1>
         <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-          ตารางนี้ควบคุม <strong>การแสดงเมนูและปุ่ม</strong> เท่านั้น
-          สิทธิ์จริงบังคับที่ RLS ของฐานข้อมูล — ติ๊กเพิ่มที่นี่ไม่ได้เปิดสิทธิ์ให้ฐานข้อมูล
-          และติ๊กออกก็ไม่ได้ปิดช่องทางเรียก API โดยตรง
+          ตารางนี้ถูกบังคับที่ฐานข้อมูลจริง ไม่ใช่แค่ซ่อนปุ่มบนหน้าจอ
+        </p>
+      </div>
+
+      <div className="card border-brand-200 bg-brand-50/60 p-4 text-sm dark:border-brand-900 dark:bg-slate-900">
+        <p className="font-medium text-slate-800 dark:text-slate-100">ช่องติ๊กนี้ทำอะไรได้บ้าง</p>
+        <ul className="mt-2 space-y-1 text-slate-700 dark:text-slate-300">
+          <li>
+            <span className="font-medium">ติ๊กออก = ปิดจริง</span> — บทบาทนั้นจะเขียนข้อมูลกลุ่มนั้นไม่ได้เลย
+            แม้จะยิงคำสั่งตรงไปที่ API ข้ามหน้าเว็บ
+          </li>
+          <li>
+            <span className="font-medium">ติ๊กเพิ่ม = ไม่ได้เปิดสิทธิ์ใหม่</span> — ปุ่มจะโผล่บนหน้าจอ
+            แต่ถ้าบทบาทนั้นไม่ได้ออกแบบให้ทำสิ่งนั้น ฐานข้อมูลยังปฏิเสธเหมือนเดิม
+          </li>
+        </ul>
+        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+          ที่ทำได้แค่ทางเดียวเพราะช่องติ๊กไม่มีข้อมูลว่า “สาขาวิชาไหน” —
+          ถ้าให้ติ๊กเพิ่มแล้วเปิดสิทธิ์ได้ เลขานุการสาขาหนึ่งจะแก้ข้อมูลอีกสาขาได้ทันทีที่ติ๊กผิดหนึ่งช่อง
+          และผู้จัดทำเอกสารจะกดตรวจสอบเอกสารของตัวเองได้
+          <br />
+          การ <span className="font-medium">อ่านข้อมูล</span> ไม่ได้คุมด้วยตารางนี้
+          (ยังคุมด้วยขอบเขตสาขาตามเดิม) เพราะจะทำให้แดชบอร์ดของผู้บริหารและอาจารย์ว่างเปล่า
+          · บทบาทผู้ดูแลระบบได้รับการยกเว้น เพื่อกันการติ๊กผิดจนไม่เหลือใครแก้กลับ
         </p>
       </div>
 
@@ -262,6 +289,7 @@ export function PermissionsPage() {
           )}
           <button type="button" className="btn-primary sm:min-w-[140px]"
             disabled={!dirty || save.isPending} onClick={() => save.mutate()}>
+            {save.isPending && <Spinner />}
             {save.isPending ? 'กำลังบันทึก…' : 'บันทึกสิทธิ์เมนู'}
           </button>
         </div>

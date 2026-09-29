@@ -6,6 +6,7 @@ import { useAuth } from '@/auth/AuthProvider'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useToast } from '@/components/Toast'
 import { toThaiError } from '@/lib/errors'
+import { Spinner } from '@/components/Spinner'
 
 interface Draft {
   orgName: string
@@ -168,6 +169,7 @@ export function OrgSettingsCard() {
             disabled={save.isPending || q.isLoading}
             onClick={() => save.mutate(draft)}
           >
+            {save.isPending && <Spinner />}
             {save.isPending ? 'กำลังบันทึก…' : 'บันทึก'}
           </button>
         </div>

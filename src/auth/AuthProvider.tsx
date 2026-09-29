@@ -20,6 +20,19 @@ interface AuthState {
   refresh: () => Promise<void>
 }
 
+/**
+ * ชนิดอุปกรณ์แบบหยาบสำหรับประวัติการเข้าใช้งาน
+ *
+ * เก็บแค่สามค่านี้โดยเจตนา ไม่ส่ง user-agent เต็มและไม่มีการเก็บ IP
+ * เพราะเป็นข้อมูลส่วนบุคคลที่ไม่จำเป็นต่อการตรวจสอบการเบิกจ่าย
+ */
+function deviceKind(): 'desktop' | 'mobile' | 'tablet' {
+  const ua = navigator.userAgent
+  if (/iPad|Tablet/i.test(ua)) return 'tablet'
+  if (/Mobi|Android|iPhone/i.test(ua)) return 'mobile'
+  return 'desktop'
+}
+
 const AuthContext = createContext<AuthState | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -102,9 +115,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (active) setLoading(false)
     })
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
       setSession(s)
       void loadProfile(s)
+
+      // บันทึกประวัติการเข้าใช้งาน — ฐานข้อมูลเว้นช่วง 15 นาทีก่อนบันทึกซ้ำให้แล้ว
+      // จึงไม่ต้องกลัวว่าเหตุการณ์นี้จะยิงซ้ำตอนต่ออายุ token
+      // ล้มเหลวก็ไม่ขัดการเข้าใช้งาน การบันทึกประวัติต้องไม่กันคนเข้าระบบ
+      if (event === 'SIGNED_IN' && s) {
+        void supabase.rpc('record_login', { p_device_kind: deviceKind() })
+      }
     })
     return () => {
       active = false

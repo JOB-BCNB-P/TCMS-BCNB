@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { Spinner } from './Spinner'
 
 interface Props {
   open: boolean
@@ -47,6 +48,7 @@ export function ConfirmDialog({
             type="button" onClick={onConfirm} disabled={busy}
             className={`${danger ? 'btn-danger' : 'btn-primary'} sm:min-w-[130px]`}
           >
+            {busy && <Spinner />}
             {busy ? 'กำลังดำเนินการ…' : confirmLabel}
           </button>
         </div>

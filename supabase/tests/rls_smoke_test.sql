@@ -1040,3 +1040,235 @@ begin
   select count(*) into n from public.app_settings where key = 'form.voucher_code';
   perform pg_temp.check('68 รหัสแบบฟอร์มถูกเอาออกจากระบบแล้ว', n = 0);
 end $$;
+
+-- =====================================================================
+-- การทดสอบด่านสิทธิ์เมนู (migration 0018)
+-- "ติ๊กออก = ปิดจริง" · "ติ๊กเพิ่ม = ไม่ได้สิทธิ์เกินบทบาท"
+-- =====================================================================
+do $$
+declare
+  v_ped uuid; v_adu uuid; v_c uuid; v_sec uuid; v_ins uuid; v_admin_role uuid;
+  n int; ok boolean;
+begin
+  select id into v_ped from public.departments where code = 'PED';
+  select id into v_adu from public.departments where code = 'ADU';
+  select id into v_sec from public.roles where code = 'secretary';
+  select id into v_ins from public.roles where code = 'instructor';
+  select id into v_admin_role from public.roles where code = 'admin';
+
+  insert into public.courses (code, name_th, course_kind, department_id)
+  values ('GATE101', 'รายวิชาทดสอบด่านเมนู', 'theory', v_ped) returning id into v_c;
+
+  -- 69. ปกติเลขานุการแก้รายวิชาของสาขาตนได้ --------------------------------
+  perform pg_temp.as_user('sec1.test@bcn.ac.th');
+  set local role authenticated;
+  update public.courses set name_th = 'แก้ครั้งที่ 1' where id = v_c;
+  get diagnostics n = row_count;
+  perform pg_temp.check('69 เลขานุการแก้รายวิชาของสาขาตนได้ (ก่อนติ๊กออก)', n = 1);
+  reset role;
+
+  -- 70. ติ๊ก "แก้" ของเมนูรายวิชาออกจากบทบาทเลขานุการ แล้วต้องแก้ไม่ได้ ------
+  update public.role_menu_permissions
+     set can_update = false
+   where role_id = v_sec and menu_key = 'master.course';
+
+  perform pg_temp.as_user('sec1.test@bcn.ac.th');
+  set local role authenticated;
+  begin
+    update public.courses set name_th = 'แก้ครั้งที่ 2' where id = v_c;
+    get diagnostics n = row_count;
+    ok := (n = 0);
+  exception when others then ok := true;
+  end;
+  perform pg_temp.check('70 ติ๊ก "แก้" ออก แล้วยิงตรงที่ฐานข้อมูลก็แก้ไม่ได้', ok);
+
+  -- 71. ยืนยันว่าข้อมูลไม่ถูกแก้จริง (ไม่ใช่แค่ error) -------------------------
+  reset role;
+  select count(*) into n from public.courses where id = v_c and name_th = 'แก้ครั้งที่ 1';
+  perform pg_temp.check('71 ข้อมูลยังเป็นค่าเดิม ไม่ได้ถูกแก้แบบเงียบ ๆ', n = 1);
+
+  -- 72. ผู้ดูแลระบบไม่ถูกด่านนี้กั้น (กันล็อกตัวเอง) ---------------------------
+  perform pg_temp.as_user('admin.test@bcn.ac.th');
+  set local role authenticated;
+  update public.courses set name_th = 'ผู้ดูแลระบบแก้ได้' where id = v_c;
+  get diagnostics n = row_count;
+  perform pg_temp.check('72 ผู้ดูแลระบบยังแก้ได้แม้บทบาทอื่นถูกติ๊กออก', n = 1);
+  reset role;
+
+  -- 73. ติ๊กกลับเข้าไป แล้วใช้งานได้เหมือนเดิม -------------------------------
+  update public.role_menu_permissions
+     set can_update = true
+   where role_id = v_sec and menu_key = 'master.course';
+  perform pg_temp.as_user('sec1.test@bcn.ac.th');
+  set local role authenticated;
+  update public.courses set name_th = 'แก้ได้อีกครั้ง' where id = v_c;
+  get diagnostics n = row_count;
+  perform pg_temp.check('73 ติ๊กกลับเข้าไปแล้วแก้ได้เหมือนเดิม', n = 1);
+  reset role;
+
+  -- 74. ติ๊กเพิ่มให้บทบาทอ่านอย่างเดียว ต้องไม่ได้สิทธิ์เขียนจริง ---------------
+  --     (นี่คือครึ่งที่ตั้งใจไม่ให้ทำงาน ถ้าทำงานเมื่อไรคือการกั้นข้ามสาขาพัง)
+  update public.role_menu_permissions
+     set can_update = true, can_create = true, can_delete = true
+   where role_id = v_ins and menu_key = 'master.course';
+
+  perform pg_temp.as_user('ins.test@bcn.ac.th');
+  set local role authenticated;
+  begin
+    update public.courses set name_th = 'อาจารย์แก้' where id = v_c;
+    get diagnostics n = row_count;
+    ok := (n = 0);
+  exception when others then ok := true;
+  end;
+  perform pg_temp.check('74 ติ๊กเพิ่มให้อาจารย์ ก็ยังเขียนไม่ได้ (ไม่เปิดเกินบทบาท)', ok);
+  reset role;
+
+  -- 75. เลขานุการยังข้ามสาขาไม่ได้ แม้จะมีสิทธิ์เมนูครบ -----------------------
+  insert into public.courses (code, name_th, course_kind, department_id)
+  values ('GATE201', 'รายวิชาสาขาผู้ใหญ่', 'theory', v_adu);
+  perform pg_temp.as_user('sec1.test@bcn.ac.th');
+  set local role authenticated;
+  begin
+    update public.courses set name_th = 'ข้ามสาขา' where code = 'GATE201';
+    get diagnostics n = row_count;
+    ok := (n = 0);
+  exception when others then ok := true;
+  end;
+  perform pg_temp.check('75 ด่านเมนูไม่ได้ทำให้การกั้นข้ามสาขาหลวมลง', ok);
+  reset role;
+
+  -- 76. ปิดเมนูจัดการสิทธิ์ของผู้ดูแลระบบไม่ได้ -------------------------------
+  begin
+    update public.role_menu_permissions set can_view = false
+     where role_id = v_admin_role and menu_key = 'settings.perms';
+    ok := false;
+  exception when others then ok := (sqlerrm like '%ไม่เหลือใครแก้สิทธิ์กลับคืน%');
+  end;
+  perform pg_temp.check('76 ปิดเมนูจัดการสิทธิ์ของผู้ดูแลระบบไม่ได้ (กันล็อกตัวเอง)', ok);
+end $$;
+
+-- =====================================================================
+-- การทดสอบประวัติการเข้าใช้งาน และการลงทะเบียนล่วงหน้า (migration 0019)
+-- =====================================================================
+do $$
+declare
+  v_ped uuid; v_mat uuid; v_new uuid; v_inv uuid; v_admin uuid;
+  n int; ok boolean; v_role text; v_active boolean; v_name text;
+begin
+  select id into v_ped from public.departments where code = 'PED';
+  select id into v_mat from public.departments where code = 'MAT';
+  select id into v_admin from auth.users where email = 'admin.test@bcn.ac.th';
+
+  -- 77. บันทึกการเข้าสู่ระบบได้ และ last_login_at ถูกเติม ---------------------
+  perform pg_temp.as_user('sec1.test@bcn.ac.th');
+  set local role authenticated;
+  perform public.record_login('desktop');
+  reset role;
+  select count(*) into n from audit.login_log l
+    join auth.users u on u.id = l.user_id where u.email = 'sec1.test@bcn.ac.th';
+  perform pg_temp.check('77 บันทึกการเข้าสู่ระบบลงประวัติได้', n = 1);
+
+  select count(*) into n from public.user_profiles p
+   where p.email = 'sec1.test@bcn.ac.th' and p.last_login_at is not null;
+  perform pg_temp.check('78 คอลัมน์ "เข้าใช้ล่าสุด" ถูกเติมค่าแล้ว', n = 1);
+
+  -- 79. เรียกซ้ำภายใน 15 นาที ต้องไม่เพิ่มแถวใหม่ -----------------------------
+  perform pg_temp.as_user('sec1.test@bcn.ac.th');
+  set local role authenticated;
+  perform public.record_login('desktop');
+  perform public.record_login('mobile');
+  reset role;
+  select count(*) into n from audit.login_log l
+    join auth.users u on u.id = l.user_id where u.email = 'sec1.test@bcn.ac.th';
+  perform pg_temp.check('79 เรียกซ้ำใน 15 นาที ไม่บันทึกแถวซ้ำ', n = 1);
+
+  -- 80. ประวัติการเข้าใช้งานลบไม่ได้ -------------------------------------------
+  begin
+    delete from audit.login_log;
+    ok := false;
+  exception when others then ok := true;
+  end;
+  perform pg_temp.check('80 ประวัติการเข้าใช้งานลบไม่ได้', ok);
+
+  -- 81. อาจารย์อ่านประวัติการเข้าใช้งานไม่ได้ ----------------------------------
+  perform pg_temp.as_user('ins.test@bcn.ac.th');
+  set local role authenticated;
+  begin
+    perform * from public.read_login_log(null, null, null, 10, 0);
+    ok := false;
+  exception when others then ok := true;
+  end;
+  perform pg_temp.check('81 อาจารย์อ่านประวัติการเข้าใช้งานไม่ได้', ok);
+  reset role;
+
+  -- 82. ลงทะเบียนล่วงหน้าแล้วล็อกอิน -> ได้ชื่อ บทบาท สาขา และเปิดใช้งานทันที ---
+  perform pg_temp.as_user('admin.test@bcn.ac.th');
+  set local role authenticated;
+  insert into public.user_invitations
+    (email, prefix, first_name, last_name, position_title, role_code, department_ids)
+  values ('newstaff.test@bcn.ac.th', 'นางสาว', 'ทดสอบ', 'ลงทะเบียนล่วงหน้า',
+          'นักวิชาการศึกษา', 'secretary', array[v_ped, v_mat])
+  returning id into v_inv;
+  reset role;
+
+  insert into auth.users (email) values ('newstaff.test@bcn.ac.th')
+  returning id into v_new;
+
+  select r.code, p.is_active, p.first_name || ' ' || p.last_name
+    into v_role, v_active, v_name
+  from public.user_profiles p join public.roles r on r.id = p.role_id
+  where p.id = v_new;
+
+  perform pg_temp.check('82 ล็อกอินครั้งแรกแล้วได้บทบาทตามที่ลงทะเบียนไว้', v_role = 'secretary');
+  perform pg_temp.check('83 และถูกเปิดใช้งานให้ทันที ไม่ต้องรออนุมัติซ้ำ', v_active);
+  perform pg_temp.check('84 ชื่อจากใบลงทะเบียนถูกนำมาใช้', v_name = 'ทดสอบ ลงทะเบียนล่วงหน้า');
+
+  select count(*) into n from public.user_department_scopes where user_id = v_new;
+  perform pg_temp.check('85 ขอบเขตสาขาถูกตั้งให้ตามใบลงทะเบียน 2 สาขา', n = 2);
+
+  select count(*) into n from public.user_invitations
+   where id = v_inv and consumed_at is not null and consumed_user_id = v_new;
+  perform pg_temp.check('86 ใบลงทะเบียนถูกทำเครื่องหมายว่าใช้แล้ว', n = 1);
+
+  -- 87. ใบที่ใช้แล้วนำมาใช้ซ้ำไม่ได้ (สร้าง auth user อีเมลเดิมไม่ได้อยู่แล้ว
+  --     แต่ต้องกันการรีเซ็ต consumed_at เพื่อยิงซ้ำ) ---------------------------
+  perform pg_temp.as_user('admin.test@bcn.ac.th');
+  set local role authenticated;
+  update public.user_invitations set consumed_at = null where id = v_inv;
+  reset role;
+  select count(*) into n from public.user_invitations
+   where id = v_inv and consumed_at is not null;
+  perform pg_temp.check('87 รีเซ็ตสถานะ "ใช้แล้ว" ของใบลงทะเบียนไม่ได้', n = 1);
+
+  -- 88. ลงทะเบียนอีเมลนอกโดเมนไม่ได้ ------------------------------------------
+  perform pg_temp.as_user('admin.test@bcn.ac.th');
+  set local role authenticated;
+  begin
+    insert into public.user_invitations (email, first_name, last_name)
+    values ('outsider@gmail.com', 'คน', 'นอก');
+    ok := false;
+  exception when others then ok := true;
+  end;
+  perform pg_temp.check('88 ลงทะเบียนล่วงหน้าด้วยอีเมลนอกโดเมนไม่ได้', ok);
+  reset role;
+
+  -- 89. เลขานุการสร้างใบลงทะเบียนไม่ได้ (เฉพาะผู้ดูแลระบบ) ---------------------
+  perform pg_temp.as_user('sec1.test@bcn.ac.th');
+  set local role authenticated;
+  begin
+    insert into public.user_invitations (email, first_name, last_name, role_code)
+    values ('another.test@bcn.ac.th', 'แอบ', 'ตั้งสิทธิ์', 'admin');
+    ok := false;
+  exception when others then ok := true;
+  end;
+  perform pg_temp.check('89 บทบาทอื่นสร้างใบลงทะเบียนไม่ได้ (กันการตั้งสิทธิ์ให้ตัวเอง)', ok);
+  reset role;
+
+  -- 90. ไม่มีใบลงทะเบียน -> ยังเป็น instructor และรออนุมัติเหมือนเดิม ----------
+  insert into auth.users (email) values ('walkin.test@bcn.ac.th');
+  select r.code, p.is_active into v_role, v_active
+  from public.user_profiles p join public.roles r on r.id = p.role_id
+  where p.email = 'walkin.test@bcn.ac.th';
+  perform pg_temp.check('90 ผู้ที่ไม่ได้ลงทะเบียนไว้ ยังเป็นอาจารย์และรออนุมัติ',
+                        v_role = 'instructor' and not v_active);
+end $$;

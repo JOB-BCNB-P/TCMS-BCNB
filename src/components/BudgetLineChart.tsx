@@ -87,7 +87,10 @@ export function BudgetLineChart({ points, fiscalYearBE, loading }: Props) {
       </header>
 
       {loading ? (
-        <div className="flex h-72 items-center justify-center text-sm text-slate-500">กำลังโหลดข้อมูล…</div>
+        <div className="h-72 p-4" aria-busy="true">
+          <div className="skeleton h-full w-full" />
+          <span className="sr-only" aria-live="polite">กำลังโหลดข้อมูล…</span>
+        </div>
       ) : courses.length === 0 ? (
         <div className="flex h-72 items-center justify-center text-sm text-slate-500">
           ยังไม่มีข้อมูลการเบิกจ่ายในปีงบประมาณนี้

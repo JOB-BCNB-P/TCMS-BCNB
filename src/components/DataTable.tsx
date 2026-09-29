@@ -17,8 +17,12 @@ interface Props<T> {
   rowKey: (row: T) => string
   pageSize?: number
   loading?: boolean
+  /** กำลังโหลดใหม่เบื้องหลัง — แสดงแถบบาง ไม่ล้างตารางทิ้ง */
+  refreshing?: boolean
   emptyText?: string
   toolbar?: ReactNode
+  /** คลาสเพิ่มรายแถว เช่น row-busy ตอนกำลังลบ หรือ row-flash ตอนเพิ่งบันทึก */
+  rowClassName?: (row: T) => string | undefined
 }
 
 /**
@@ -28,7 +32,8 @@ interface Props<T> {
  */
 export function DataTable<T>({
   title, description, rows, columns, rowKey,
-  pageSize = 10, loading, emptyText = 'ไม่พบข้อมูล', toolbar,
+  pageSize = 10, loading, refreshing, emptyText = 'ไม่พบข้อมูล', toolbar,
+  rowClassName,
 }: Props<T>) {
   const [page, setPage] = useState(0)
   const pageCount = Math.max(1, Math.ceil(rows.length / pageSize))
@@ -47,6 +52,11 @@ export function DataTable<T>({
         </div>
         {toolbar && <div className="no-print flex gap-2">{toolbar}</div>}
       </header>
+
+      {/* โหลดใหม่เบื้องหลัง: บอกให้รู้ว่ากำลังทำงาน โดยไม่ล้างข้อมูลที่อ่านอยู่ทิ้ง */}
+      {refreshing && !loading && (
+        <div className="no-print progress-bar" role="status" aria-label="กำลังโหลดข้อมูลใหม่" />
+      )}
 
       <div className="overflow-x-auto">
         <table className="w-full min-w-full border-collapse text-sm">
@@ -69,15 +79,33 @@ export function DataTable<T>({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+            {/* โครงร่างที่มีจำนวนคอลัมน์และความสูงเท่าแถวจริง
+                เพื่อไม่ให้หน้ากระโดดตอนข้อมูลมาถึง */}
+            {loading && Array.from({ length: 5 }, (_, i) => (
+              <tr key={`sk-${i}`} aria-hidden="true">
+                {columns.map((c) => (
+                  <td
+                    key={c.key}
+                    className={[
+                      'px-3 py-2.5',
+                      c.hideOnMobile ? 'hidden md:table-cell' : '',
+                    ].join(' ')}
+                  >
+                    <div
+                      className="skeleton h-4"
+                      style={{ width: `${[85, 60, 70, 45, 55][i % 5]}%` }}
+                    />
+                  </td>
+                ))}
+              </tr>
+            ))}
             {loading && (
-              <tr>
-                <td colSpan={columns.length} className="px-3 py-10 text-center text-slate-500">
-                  กำลังโหลดข้อมูล…
-                </td>
+              <tr className="sr-only">
+                <td colSpan={columns.length} aria-live="polite">กำลังโหลดข้อมูล…</td>
               </tr>
             )}
             {!loading && slice.length === 0 && (
-              <tr>
+              <tr className="anim-pop">
                 <td colSpan={columns.length} className="px-3 py-10 text-center text-slate-500">
                   {emptyText}
                 </td>
@@ -85,7 +113,14 @@ export function DataTable<T>({
             )}
             {!loading &&
               slice.map((row) => (
-                <tr key={rowKey(row)} className="hover:bg-brand-50/60 dark:hover:bg-slate-800/60">
+                <tr
+                  key={rowKey(row)}
+                  className={[
+                    'transition-colors duration-150',
+                    'hover:bg-brand-50/60 dark:hover:bg-slate-800/60',
+                    rowClassName?.(row) ?? '',
+                  ].join(' ')}
+                >
                   {columns.map((c) => (
                     <td
                       key={c.key}

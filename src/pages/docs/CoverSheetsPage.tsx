@@ -111,6 +111,7 @@ export function CoverSheetsPage() {
         rows={rows}
         rowKey={(r) => r.id}
         loading={list.isLoading || lookups.isLoading}
+        refreshing={list.isFetching}
         emptyText="ยังไม่มีหน้างบฯ"
         columns={[
           {

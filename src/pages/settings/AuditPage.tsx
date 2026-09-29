@@ -62,8 +62,22 @@ function diffFields(before: Record<string, unknown> | null, after: Record<string
 const show = (v: unknown) =>
   v === null || v === undefined || v === '' ? '(ว่าง)' : typeof v === 'object' ? JSON.stringify(v) : String(v)
 
+interface LoginRow {
+  id: number
+  occurred_at: string
+  user_id: string | null
+  email: string | null
+  role_code: string | null
+  device_kind: string | null
+}
+
+const DEVICE_LABEL: Record<string, string> = {
+  desktop: 'คอมพิวเตอร์', mobile: 'โทรศัพท์', tablet: 'แท็บเล็ต', unknown: 'ไม่ระบุ',
+}
+
 export function AuditPage() {
   const { user } = useAuth()
+  const [tab, setTab] = useState<'login' | 'changes'>('login')
   const [table, setTable] = useState('')
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
@@ -71,9 +85,25 @@ export function AuditPage() {
 
   const canView = user?.role_code === 'admin' || user?.role_code === 'executive'
 
+  const loginQ = useQuery({
+    queryKey: ['login-log', from, to],
+    enabled: canView && tab === 'login',
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('read_login_log', {
+        p_from: from ? new Date(`${from}T00:00:00+07:00`).toISOString() : null,
+        p_to: to ? new Date(new Date(`${to}T00:00:00+07:00`).getTime() + 86_400_000).toISOString() : null,
+        p_email: null,
+        p_limit: 200,
+        p_offset: 0,
+      })
+      if (error) throw error
+      return (data ?? []) as LoginRow[]
+    },
+  })
+
   const q = useQuery({
     queryKey: ['audit', table, from, to],
-    enabled: canView,
+    enabled: canView && tab === 'changes',
     queryFn: async () => {
       const { data, error } = await supabase.rpc('read_audit_log', {
         p_table: table || null,
@@ -93,7 +123,7 @@ export function AuditPage() {
   if (!canView) {
     return (
       <div className="space-y-4">
-        <h1 className="text-lg font-semibold text-slate-900 dark:text-white sm:text-xl">ร่องรอยการใช้งาน</h1>
+        <h1 className="text-lg font-semibold text-slate-900 dark:text-white sm:text-xl">ประวัติการเข้าใช้งาน</h1>
         <div className="card p-6 text-sm text-slate-600 dark:text-slate-300">
           หน้านี้เปิดให้เฉพาะผู้ดูแลระบบและผู้บริหาร
         </div>
@@ -128,28 +158,45 @@ export function AuditPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-lg font-semibold text-slate-900 dark:text-white sm:text-xl">ร่องรอยการใช้งาน</h1>
+        <h1 className="text-lg font-semibold text-slate-900 dark:text-white sm:text-xl">ประวัติการเข้าใช้งาน</h1>
         <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-          บันทึกทุกการเพิ่ม แก้ไข และลบข้อมูลการเงิน — ลบหรือแก้ไขรายการในนี้ไม่ได้ แม้โดยผู้ดูแลระบบ
+          ใครเข้าระบบเมื่อไร และใครแก้ข้อมูลอะไรบ้าง — ทั้งสองอย่างลบหรือแก้ไขไม่ได้ แม้โดยผู้ดูแลระบบ
         </p>
       </div>
 
-      {q.error && (
+      <div className="card overflow-x-auto p-1">
+        <div role="tablist" aria-label="ประเภทประวัติ" className="flex gap-1">
+          <button type="button" role="tab" aria-selected={tab === 'login'}
+            onClick={() => setTab('login')}
+            className={tab === 'login' ? 'tab-btn-on' : 'tab-btn-off'}>
+            การเข้าใช้งาน
+          </button>
+          <button type="button" role="tab" aria-selected={tab === 'changes'}
+            onClick={() => setTab('changes')}
+            className={tab === 'changes' ? 'tab-btn-on' : 'tab-btn-off'}>
+            การแก้ไขข้อมูล
+          </button>
+        </div>
+      </div>
+
+      {(q.error || loginQ.error) && (
         <div role="alert" className="card border-rose-300 bg-rose-50 p-4 text-sm text-rose-800 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-200">
-          <span aria-hidden="true">⚠ </span>{toThaiError(q.error)}
+          <span aria-hidden="true">⚠ </span>{toThaiError(q.error ?? loginQ.error)}
         </div>
       )}
 
       <section className="card p-4">
         <h2 className="sr-only">ตัวกรอง</h2>
         <div className="grid gap-3 sm:grid-cols-3">
-          <div>
-            <label htmlFor="a-table" className="field-label">ข้อมูล</label>
-            <select id="a-table" className="field-input" value={table} onChange={(e) => setTable(e.target.value)}>
-              <option value="">ทั้งหมด</option>
-              {Object.entries(TABLE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </select>
-          </div>
+          {tab === 'changes' && (
+            <div>
+              <label htmlFor="a-table" className="field-label">ข้อมูล</label>
+              <select id="a-table" className="field-input" value={table} onChange={(e) => setTable(e.target.value)}>
+                <option value="">ทั้งหมด</option>
+                {Object.entries(TABLE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+            </div>
+          )}
           <div>
             <label htmlFor="a-from" className="field-label">ตั้งแต่วันที่</label>
             <input id="a-from" type="date" className="field-input" value={from} onChange={(e) => setFrom(e.target.value)} />
@@ -164,14 +211,43 @@ export function AuditPage() {
         </p>
       </section>
 
-      <DataTable
-        title="รายการที่พบ"
-        rows={q.data ?? []}
-        columns={columns}
-        rowKey={(r) => String(r.id)}
-        loading={q.isLoading}
-        emptyText="ไม่พบร่องรอยในช่วงที่เลือก"
-      />
+      {tab === 'login' ? (
+        <DataTable<LoginRow>
+          title="การเข้าใช้งาน"
+          rows={loginQ.data ?? []}
+          rowKey={(r) => String(r.id)}
+          loading={loginQ.isLoading}
+          refreshing={loginQ.isFetching}
+          emptyText="ไม่พบการเข้าใช้งานในช่วงที่เลือก"
+          columns={[
+            { key: 'when', header: 'เมื่อ', render: (r) => formatTimestampBE(r.occurred_at) },
+            { key: 'who', header: 'ผู้ใช้', render: (r) => r.email ?? '-' },
+            { key: 'role', header: 'บทบาท', hideOnMobile: true, render: (r) => r.role_code ?? '-' },
+            {
+              key: 'device', header: 'อุปกรณ์', hideOnMobile: true,
+              render: (r) => DEVICE_LABEL[r.device_kind ?? 'unknown'] ?? 'ไม่ระบุ',
+            },
+          ]}
+        />
+      ) : (
+        <DataTable
+          title="การแก้ไขข้อมูล"
+          rows={q.data ?? []}
+          columns={columns}
+          rowKey={(r) => String(r.id)}
+          loading={q.isLoading}
+          refreshing={q.isFetching}
+          emptyText="ไม่พบร่องรอยในช่วงที่เลือก"
+        />
+      )}
+
+      {tab === 'login' && (
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          บันทึกเมื่อเข้าสู่ระบบสำเร็จ และเว้นช่วง 15 นาทีก่อนบันทึกซ้ำของคนเดิม
+          เพื่อไม่ให้การต่ออายุ token กลายเป็นรายการซ้ำเต็มตาราง
+          · ไม่เก็บหมายเลข IP และไม่เก็บรายละเอียดเบราว์เซอร์ เก็บเพียงชนิดอุปกรณ์
+        </p>
+      )}
 
       {open && (
         <div

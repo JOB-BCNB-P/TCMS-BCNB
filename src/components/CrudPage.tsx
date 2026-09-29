@@ -53,6 +53,8 @@ export function CrudPage<T extends { id: string }>({
   const [deleting, setDeleting] = useState<T | null>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [search, setSearch] = useState('')
+  /** แถวที่เพิ่งบันทึก — ไฮไลต์สั้น ๆ ให้เห็นว่าอะไรเปลี่ยน แล้วปล่อยจางเอง */
+  const [flashId, setFlashId] = useState<string | null>(null)
 
   const rows = useMemo(() => {
     const all = crud.list.data ?? []
@@ -88,6 +90,17 @@ export function CrudPage<T extends { id: string }>({
   }
 
   const allColumns = canUpdate || canDelete ? [...columns, actionColumn] : columns
+
+  /**
+   * สถานะรายแถว
+   * - กำลังลบ: จางลงและกดไม่ได้ ระหว่างรอฐานข้อมูลตอบ ไม่ใช่หายไปเลยแล้วค่อยกลับมา
+   * - เพิ่งบันทึก: เรืองขึ้นแล้วจางหาย ผู้ใช้จะไม่ต้องไล่หาว่าแถวไหนเปลี่ยน
+   */
+  const rowClassName = (row: T) => {
+    if (deleting?.id === row.id && crud.remove.isPending) return 'row-busy'
+    if (flashId === row.id) return 'row-flash'
+    return undefined
+  }
   const formFields = typeof fields === 'function' ? fields(editing ?? null) : fields
 
   return (
@@ -119,6 +132,8 @@ export function CrudPage<T extends { id: string }>({
         columns={allColumns}
         rowKey={(r) => r.id}
         loading={crud.list.isLoading || loadingExtra}
+        refreshing={crud.list.isFetching}
+        rowClassName={rowClassName}
         emptyText={search ? 'ไม่พบรายการที่ค้นหา' : 'ยังไม่มีข้อมูล — กดปุ่มเพิ่มเพื่อเริ่มบันทึก'}
         toolbar={
           <>
@@ -165,6 +180,10 @@ export function CrudPage<T extends { id: string }>({
               crud.invalidate()
             }
             setEditing(undefined)
+            // ไฮไลต์แถวที่เพิ่งบันทึก แล้วถอดคลาสออกหลังแอนิเมชันจบ
+            // ถ้าไม่ถอด แถวจะไฮไลต์ค้างเมื่อ react-query โหลดข้อมูลใหม่
+            setFlashId(row.id)
+            window.setTimeout(() => setFlashId((cur) => (cur === row.id ? null : cur)), 1800)
           }
           if (editing) {
             crud.update.mutate({ ...payload, id: editing.id },

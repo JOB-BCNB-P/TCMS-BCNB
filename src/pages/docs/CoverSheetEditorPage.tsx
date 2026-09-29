@@ -296,7 +296,22 @@ export function CoverSheetEditorPage() {
     label: `${c.voucher_no ?? '(ไม่มีเลขที่)'} · ${c.subject_text ?? '-'} · ${formatBaht(c.total_amount)} บาท`,
   })), [candidates.data])
 
-  if (sq.isLoading) return <p className="text-sm text-slate-500">กำลังโหลดเอกสาร…</p>
+  if (sq.isLoading) {
+    return (
+      <div className="space-y-4" aria-busy="true">
+        <div className="card space-y-3 p-4">
+          <div className="skeleton h-5 w-56" />
+          <div className="skeleton h-4 w-80" />
+        </div>
+        <div className="card space-y-3 p-4">
+          <div className="skeleton h-4 w-40" />
+          <div className="skeleton h-4 w-full" />
+          <div className="skeleton h-4 w-2/3" />
+        </div>
+        <span className="sr-only" aria-live="polite">กำลังโหลดเอกสาร…</span>
+      </div>
+    )
+  }
   if (sq.error || !s) {
     return (
       <div role="alert" className="card border-rose-300 bg-rose-50 p-4 text-sm text-rose-800 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-200">
@@ -545,7 +560,7 @@ export function CoverSheetEditorPage() {
         open={!!removing}
         danger
         title="นำใบสำคัญออกจากหน้างบฯ"
-        message={'ใบสำคัญจะกลับไปเป็นรายการที่เลือกขึ้นหน้างบฯ ใหม่ได้\nการนำออกถูกบันทึกไว้ในร่องรอยการใช้งาน'}
+        message={'ใบสำคัญจะกลับไปเป็นรายการที่เลือกขึ้นหน้างบฯ ใหม่ได้\nการนำออกถูกบันทึกไว้ในประวัติการใช้งาน'}
         confirmLabel="ยืนยันนำออก"
         busy={removeItem.isPending}
         onCancel={() => setRemoving(null)}

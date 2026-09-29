@@ -407,7 +407,20 @@ export function VoucherEditorPage() {
   }))
 
   if (vq.isLoading) {
-    return <p className="text-sm text-slate-500">กำลังโหลดเอกสาร…</p>
+    return (
+      <div className="space-y-4" aria-busy="true">
+        <div className="card space-y-3 p-4">
+          <div className="skeleton h-5 w-56" />
+          <div className="skeleton h-4 w-80" />
+        </div>
+        <div className="card space-y-3 p-4">
+          <div className="skeleton h-4 w-40" />
+          <div className="skeleton h-4 w-full" />
+          <div className="skeleton h-4 w-2/3" />
+        </div>
+        <span className="sr-only" aria-live="polite">กำลังโหลดเอกสาร…</span>
+      </div>
+    )
   }
   if (vq.error || !v) {
     return (
@@ -772,7 +785,7 @@ export function VoucherEditorPage() {
         open={!!deleteLine}
         danger
         title="ยืนยันการลบรายการ"
-        message={'ลบแล้วกู้คืนไม่ได้ และยอดรวมในใบหลักฐานจะถูกคำนวณใหม่\nการลบถูกบันทึกไว้ในร่องรอยการใช้งาน'}
+        message={'ลบแล้วกู้คืนไม่ได้ และยอดรวมในใบหลักฐานจะถูกคำนวณใหม่\nการลบถูกบันทึกไว้ในประวัติการใช้งาน'}
         confirmLabel="ยืนยันลบ"
         busy={removeLine.isPending}
         onCancel={() => setDeleteLine(null)}
@@ -807,7 +820,7 @@ export function VoucherEditorPage() {
         fields={[
           {
             name: 'reason', label: 'เหตุผลการยกเลิก', type: 'textarea', required: true, wide: true,
-            help: 'บันทึกไว้ถาวรในเอกสารและในร่องรอยการใช้งาน ต้องยาวอย่างน้อย 5 ตัวอักษร',
+            help: 'บันทึกไว้ถาวรในเอกสารและในประวัติการใช้งาน ต้องยาวอย่างน้อย 5 ตัวอักษร',
             validate: (val) => (String(val ?? '').trim().length < 5 ? 'ต้องระบุเหตุผลอย่างน้อย 5 ตัวอักษร' : null),
           },
         ]}

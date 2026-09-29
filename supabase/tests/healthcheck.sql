@@ -37,9 +37,9 @@ with c as (
          (select count(*) from pg_tables where schemaname='private'
            and tablename='bank_accounts')::int, 1
   union all select '*** ตาราง audit (ห้ามลบได้) ***',
-         (select count(*) from pg_tables where schemaname='audit')::int, 2
+         (select count(*) from pg_tables where schemaname='audit')::int, 3
   union all select 'RLS policy ทั้งหมด',
-         (select count(*) from pg_policies where schemaname='public')::int, 86
+         (select count(*) from pg_policies where schemaname='public')::int, 123
   union all select '*** ตารางที่เปิด RLS แต่ไม่มี policy เลย (เข้าถึงไม่ได้) ***',
          (select count(*) from pg_tables t
            where t.schemaname='public'
@@ -71,6 +71,16 @@ with c as (
            where table_schema='public' and table_name='treasury_cover_sheets'
              and column_name='total_amount' and privilege_type='UPDATE'
              and grantee='authenticated')::int, 0
+  union all select '*** ประวัติการเข้าใช้งานลบไม่ได้ ***',
+         (select count(*) from pg_trigger
+           where tgname='trg_login_log_immutable' and not tgisinternal)::int, 1
+  union all select '*** ตารางลงทะเบียนล่วงหน้า ***',
+         (select count(*) from pg_tables where schemaname='public' and tablename='user_invitations')::int, 1
+  union all select '*** RLS ของตารางลงทะเบียนล่วงหน้า ***',
+         (select count(*) from pg_policies where schemaname='public' and tablename='user_invitations')::int, 4
+  union all select 'ชื่อเมนูประวัติการเข้าใช้งาน',
+         (select count(*) from public.menus
+           where key='settings.audit' and name_th='ประวัติการเข้าใช้งาน')::int, 1
   union all select 'เมนูรายวิชาที่เปิดสอน',
          (select count(*) from public.menus where key='master.offering')::int, 1
   union all select '*** trigger สร้างเช็คลิสต์ให้ใบสำคัญ (ถ้าไม่มี การตรวจเอกสารแนบจะผ่านเปล่า) ***',
@@ -86,6 +96,16 @@ with c as (
            where table_schema='public' and table_name='payment_vouchers'
              and column_name='status' and privilege_type='UPDATE'
              and grantee='authenticated')::int, 0
+  union all select '*** ด่านสิทธิ์เมนูแบบ RESTRICTIVE (ต้องมี 33 = 11 ตาราง x 3 คำสั่ง) ***',
+         (select count(*) from pg_policies
+           where schemaname='public' and policyname like '%_menu_%'
+             and permissive = 'RESTRICTIVE')::int, 33
+  union all select '*** ฟังก์ชันด่านสิทธิ์เมนู ***',
+         (select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+           where n.nspname='public' and p.proname='menu_allows')::int, 1
+  union all select '*** trigger กันปิดเมนูสิทธิ์ของผู้ดูแลระบบ ***',
+         (select count(*) from pg_trigger
+           where tgname='trg_rmp_guard_admin' and not tgisinternal)::int, 1
   union all select '*** ใบสำคัญสถานะร่างที่ไม่มีเช็คลิสต์ (ต้องเป็น 0) ***',
          (select count(*) from public.payment_vouchers v
            where v.status = 'draft'

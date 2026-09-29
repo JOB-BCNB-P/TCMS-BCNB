@@ -199,12 +199,18 @@ export function BudgetPage() {
                   </tr>
                 ))}
                 {rates.isLoading && (
-                  <tr><td colSpan={6} className="px-3 py-6 text-center text-slate-500">กำลังโหลด…</td></tr>
+                  Array.from({ length: 3 }, (_, i) => (
+                    <tr key={`sk-${i}`} aria-hidden="true">
+                      {Array.from({ length: 6 }, (__, j) => (
+                        <td key={j} className="px-3 py-2.5"><div className="skeleton h-4 w-3/4" /></td>
+                      ))}
+                    </tr>
+                  ))
                 )}
               </tbody>
             </table>
             <p className="border-t border-slate-200 p-3 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
-              แก้ไขอัตราได้เฉพาะผู้ดูแลระบบผ่านตาราง <code>pay_rates</code> และทุกการแก้ไขถูกบันทึกไว้ในร่องรอยการใช้งาน
+              แก้ไขอัตราได้เฉพาะผู้ดูแลระบบผ่านตาราง <code>pay_rates</code> และทุกการแก้ไขถูกบันทึกไว้ในประวัติการใช้งาน
             </p>
           </div>
         )}

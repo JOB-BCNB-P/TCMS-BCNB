@@ -49,7 +49,7 @@ export const MENU_TREE: MenuNode[] = [
       { key: 'settings.users', label: 'จัดการผู้ใช้งาน', path: '/settings/users' },
       { key: 'settings.perms', label: 'สิทธิ์การเข้าถึงของแต่ละบทบาท', path: '/settings/permissions' },
       { key: 'settings.ref', label: 'ปีการศึกษา/ภาคการศึกษา/ปีงบประมาณ', path: '/settings/reference' },
-      { key: 'settings.audit', label: 'ร่องรอยการใช้งาน', path: '/settings/audit' },
+      { key: 'settings.audit', label: 'ประวัติการเข้าใช้งาน', path: '/settings/audit' },
     ],
   },
 ]
@@ -61,9 +61,12 @@ export function usePermissions() {
 
   return useMemo(() => {
     /**
-     * สำคัญ: ตารางนี้ควบคุม "การแสดงเมนู" เท่านั้น
-     * สิทธิ์จริงบังคับที่ RLS และ RPC ของฐานข้อมูล
-     * การซ่อนปุ่มไม่ใช่การควบคุมสิทธิ์ เพราะยิง REST ตรงได้
+     * ใช้ตัดสินว่าจะแสดงเมนูและปุ่มอะไร
+     *
+     * ตั้งแต่ migration 0018 ตารางเดียวกันนี้ถูกบังคับที่ฐานข้อมูลด้วย
+     * RESTRICTIVE policy ด้วย — ติ๊กออกแล้วปิดจริงถึง API
+     * แต่ยังห้ามคิดว่าการซ่อนปุ่มคือการควบคุมสิทธิ์: การ "ติ๊กเพิ่ม"
+     * ไม่ได้เปิดสิทธิ์ใด ๆ ขอบเขตสาขาและการแบ่งแยกหน้าที่ยังอยู่ที่ RLS เดิม
      */
     const can = (menuKey: string, action: Action = 'view'): boolean => {
       const p = permissions.get(menuKey)

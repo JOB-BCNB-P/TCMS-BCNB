@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+import { useIsFetching, useIsMutating } from '@tanstack/react-query'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthProvider'
 import { usePermissions, type MenuNode } from '@/hooks/usePermissions'
@@ -44,6 +45,14 @@ export function AppLayout() {
     toast.info('ออกจากระบบอัตโนมัติ เนื่องจากไม่มีการใช้งานเป็นเวลา 30 นาที')
   }, [signOut, toast])
   const idle = useIdleLogout(!!user, onIdleTimeout)
+
+  /**
+   * แถบบางใต้หัวเว็บ บอกว่าระบบกำลังคุยกับฐานข้อมูลอยู่
+   *
+   * รวมทุกหน้าไว้ที่เดียว ผู้ใช้จึงมีที่มองที่เดียวว่า "ระบบทำงานอยู่หรือค้าง"
+   * โดยที่แต่ละหน้าไม่ต้องกะพริบเนื้อหาของตัวเองทิ้งเวลาโหลดใหม่
+   */
+  const busyCount = useIsFetching() + useIsMutating()
 
   return (
     <div className="min-h-dvh bg-brand-50 dark:bg-slate-950">
@@ -92,6 +101,10 @@ export function AppLayout() {
             <span className="sr-only sm:hidden">ออกจากระบบ</span>
           </button>
         </div>
+
+        {busyCount > 0 && (
+          <div className="progress-bar" role="status" aria-label="กำลังทำงาน" />
+        )}
       </header>
 
       <div className="flex">

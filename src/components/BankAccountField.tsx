@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import { toThaiError } from '@/lib/errors'
 import { useToast } from './Toast'
 import { useAuth } from '@/auth/AuthProvider'
+import { Spinner } from './Spinner'
 
 type OwnerType = 'payee' | 'clinical_site'
 
@@ -249,6 +250,7 @@ export function BankAccountField({
           </div>
           <div className="flex gap-2 sm:col-span-3">
             <button type="button" className="btn-primary !min-h-[40px] !px-3" disabled={busy} onClick={() => void save()}>
+              {busy && <Spinner />}
               {busy ? 'กำลังบันทึก…' : 'บันทึกเลขบัญชี'}
             </button>
             <button type="button" className="btn-secondary !min-h-[40px] !px-3"

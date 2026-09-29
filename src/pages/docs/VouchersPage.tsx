@@ -189,6 +189,7 @@ export function VouchersPage() {
         rows={rows}
         rowKey={(r) => r.id}
         loading={list.isLoading || lookups.isLoading}
+        refreshing={list.isFetching}
         emptyText="ยังไม่มีใบเบิก — กดปุ่มสร้างใบเบิกเพื่อเริ่ม"
         toolbar={
           <button type="button" className="btn-secondary !min-h-[40px] !px-3" disabled={rows.length === 0}
