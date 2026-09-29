@@ -26,7 +26,9 @@ export function CoordinatorsPage() {
       description='คนเดียวกับ "ผู้จัดทำ" ที่จะลงนามในใบหลักฐานการเบิกจ่ายค่าสอนพิเศษ'
       menuKey="master.coord"
       table="coordinators"
-      select="id, prefix, first_name, last_name, position_title, department_id, is_active, departments(name_th), coordinator_departments(department_id)"
+      // departments ถูกอ้างถึงได้สองทาง (coordinators.department_id และผ่าน coordinator_departments)
+      // ถ้าไม่ระบุชื่อ foreign key ให้ชัด PostgREST จะตอบ 300 Multiple Choices แล้วตารางจะว่าง
+      select="id, prefix, first_name, last_name, position_title, department_id, is_active, departments!coordinators_department_id_fkey(name_th), coordinator_departments(department_id)"
       orderBy="first_name"
       label="ผู้ประสานงานรายวิชา"
       loadingExtra={lookups.isLoading}

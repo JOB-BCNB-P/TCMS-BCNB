@@ -28,7 +28,9 @@ export function SitesPage() {
       description="สถานที่ที่นักศึกษาไปฝึกภาคปฏิบัติ — ผู้รับค่าตอบแทนแหล่งฝึกคือหน่วยงาน ไม่ใช่บุคคล"
       menuKey="master.site"
       table="clinical_sites"
-      select="id, name_th, ward, province, department_id, phone, has_bank_account, is_active, departments(name_th), clinical_site_departments(department_id)"
+      // departments ถูกอ้างถึงได้สองทาง (clinical_sites.department_id และผ่าน clinical_site_departments)
+      // ถ้าไม่ระบุชื่อ foreign key ให้ชัด PostgREST จะตอบ 300 Multiple Choices แล้วตารางจะว่าง
+      select="id, name_th, ward, province, department_id, phone, has_bank_account, is_active, departments!clinical_sites_department_id_fkey(name_th), clinical_site_departments(department_id)"
       orderBy="name_th"
       label="แหล่งฝึก"
       loadingExtra={lookups.isLoading}
