@@ -28,7 +28,9 @@ export function CoursesPage() {
       description="ข้อมูลรายวิชาของแต่ละสาขาวิชา — เปิดสอนในภาคใดบ้างกำหนดที่เมนูหมวดเงินและวงเงินรายวิชา"
       menuKey="master.course"
       table="courses"
-      select="id, code, name_th, name_en, course_kind, department_id, credits, is_active, departments(name_th), course_departments(department_id)"
+      // departments ถูกอ้างถึงได้สองทาง (courses.department_id และผ่าน course_departments)
+      // ถ้าไม่ระบุชื่อ foreign key ให้ชัด PostgREST จะตอบ 300 Multiple Choices แล้วตารางจะว่าง
+      select="id, code, name_th, name_en, course_kind, department_id, credits, is_active, departments!courses_department_id_fkey(name_th), course_departments(department_id)"
       orderBy="code"
       label="รายวิชา"
       loadingExtra={lookups.isLoading}

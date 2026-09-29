@@ -58,6 +58,17 @@ const BY_TEXT: { match: RegExp; message: string }[] = [
   { match: /provider is not enabled/i, message: 'ยังไม่ได้เปิดการเข้าสู่ระบบด้วย Google ที่ Supabase' },
 ]
 
+/** แปลง details ให้เป็นข้อความที่อ่านได้เสมอ ไม่ว่าจะมาเป็นสตริง array หรือ object */
+function describeDetail(detail: unknown): string {
+  if (detail == null) return ''
+  if (typeof detail === 'string') return detail
+  try {
+    return JSON.stringify(detail)
+  } catch {
+    return ''
+  }
+}
+
 export function toThaiError(err: unknown): string {
   if (!err) return 'เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ'
 
@@ -72,7 +83,9 @@ export function toThaiError(err: unknown): string {
   if (e.code && BY_CODE[e.code]) {
     const base = BY_CODE[e.code]
     // details ของ PostgreSQL มักบอกชื่อคอลัมน์ที่ชน ซึ่งช่วยผู้ใช้ได้จริง
-    const detail = (e as { details?: string }).details
+    // แต่ PostgREST บางรหัส (เช่น PGRST201) ส่ง details มาเป็น array ของ object
+    // ถ้าต่อสตริงตรง ๆ จะได้ "[object Object]" ซึ่งไม่ช่วยใครเลย จึงต้องแปลงก่อน
+    const detail = describeDetail((e as { details?: unknown }).details)
     return detail ? `${base}\n(${detail})` : base
   }
 
